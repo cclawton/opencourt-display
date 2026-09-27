@@ -158,6 +158,7 @@ The current laptop prototype uses `vinext`, Wrangler and a Cloudflare-specific V
 - Added public configuration projection, ETag/304 handling, malformed-path handling and contract tests. The Lambda role has only `dynamodb:GetItem`; no public write route is present.
 - Added a guarded local seed command that validates image/Google Slides providers and allows only a strictly newer revision to replace an existing device item.
 - Parameterised the club, stage and operational owner; added account-migration tags and deletion protection; and documented a one-display-at-a-time move to a future club-owned AWS account in `infra/MIGRATION.md`.
+- Installed the official Agent Toolkit for AWS `aws-core` Codex plugin and added persistent repository guidance for CDK, current AWS documentation, least privilege, cost control and auditable AWS MCP operations.
 - The AWS account is authenticated but not yet CDK-bootstrapped. No cloud resources have been created. Deployment awaits confirmation of the billing-alert email address; Google-authenticated committee writes and static control-room hosting remain subsequent increments.
 
 ### Phase 4: coexistence at the club
