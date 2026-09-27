@@ -45,11 +45,11 @@ No club password or Google credential is committed to the image or repository. T
 
 ## AWS control plane
 
-The cost-minimal read-only device configuration stack is in [`infra/`](infra/README.md). It defines a pay-per-request DynamoDB table, a small ARM Lambda Function URL with ETag support, a guarded seed command and mandatory low-dollar billing alerts. It is synthesized and tested but is not deployed by the repository's automated checks. Resource names and ownership tags are parameterised, with a [club-account migration runbook](infra/MIGRATION.md) for later transfer out of the pilot account.
+The cost-minimal AWS control plane is in [`infra/`](infra/README.md). It defines pay-per-request DynamoDB tables, a small ARM Lambda Function URL with ETag support, Google ID-token-protected committee actions, a retained audit trail, a private S3/CloudFront control room, a guarded seed command and mandatory low-dollar billing alerts. Resource names and ownership tags are parameterised, with a [club-account migration runbook](infra/MIGRATION.md) for later transfer out of the pilot account.
 
 Agent-assisted AWS work uses the official [Agent Toolkit for AWS](docs/AWS_AGENT_TOOLKIT.md), with repository guardrails for Sydney-region deployment, CDK, least privilege, cost control and future club ownership.
 
-Administrative writes remain disabled until Google Workspace ID-token verification and an explicit committee allow-list are implemented.
+Administrative writes are disabled until the pilot stack is deployed with the club's real Google web client ID and committee email allow-list. Placeholder values deliberately reject every administrator.
 
 ## Product model
 

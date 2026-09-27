@@ -154,12 +154,12 @@ The current laptop prototype uses `vinext`, Wrangler and a Cloudflare-specific V
 
 #### Phase 3 implementation status — 27 September 2026
 
-- Added and synthesized the isolated AWS CDK package in `infra/` for Sydney (`ap-southeast-2`). It defines a pay-per-request DynamoDB table, a 128 MB ARM Lambda with reserved concurrency of two, a GET-only Function URL, seven-day logs and mandatory actual-cost alerts at USD $1, $5 and $10.
+- Added and synthesized the isolated AWS CDK package in `infra/` for Sydney (`ap-southeast-2`). It defines pay-per-request DynamoDB tables, a 128 MB ARM Lambda with reserved concurrency of two, a public read-only Function URL plus Google ID-token-protected admin actions, a retained audit trail, a private S3/CloudFront control room, seven-day logs and mandatory actual-cost alerts at USD $1, $5 and $10.
 - Added public configuration projection, ETag/304 handling, malformed-path handling and contract tests. The Lambda role has only `dynamodb:GetItem`; no public write route is present.
-- Added a guarded local seed command that validates image/Google Slides providers and allows only a strictly newer revision to replace an existing device item.
+- Added guarded local seed commands that validate image/Google Slides providers and programme metadata. Device changes use strictly newer revisions; authenticated control-room changes write the device update and audit event atomically.
 - Parameterised the club, stage and operational owner; added account-migration tags and deletion protection; and documented a one-display-at-a-time move to a future club-owned AWS account in `infra/MIGRATION.md`.
 - Installed the official Agent Toolkit for AWS `aws-core` Codex plugin and added persistent repository guidance for CDK, current AWS documentation, least privilege, cost control and auditable AWS MCP operations.
-- The AWS account is authenticated but not yet CDK-bootstrapped. No cloud resources have been created. Deployment awaits confirmation of the billing-alert email address; Google-authenticated committee writes and static control-room hosting remain subsequent increments.
+- The existing pilot account already hosts the read-only device control plane. The authenticated control-room increment is synthesized and tested locally but awaits deployment with the real Google web client ID, committee email allow-list and explicit confirmation of the target account/billing contact. Placeholder values deliberately reject all admin sign-ins.
 
 ### Phase 4: coexistence at the club
 

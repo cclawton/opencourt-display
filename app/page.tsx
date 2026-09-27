@@ -2,7 +2,7 @@
 
 /* oxlint-disable react/react-compiler -- browser-only device configuration is hydrated after mount. */
 
-import { useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import {
   ArrowLeft,
   CalendarDays,
@@ -31,6 +31,9 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
+import { GoogleSignIn, signOutGoogle } from '@/components/google-sign-in';
+import { issueDeviceAction, loadAdminState, type RemoteDevice, type RemoteProgramme } from '@/lib/control-api';
+import { getRuntimeConfig } from '@/lib/runtime-config';
 
 type View = 'display' | 'control' | 'setup';
 type DisplayMode = 'cached' | 'native';
@@ -100,6 +103,7 @@ function formatRefreshTime(date: Date) {
 }
 
 export default function Home() {
+  const runtimeConfig = useMemo(getRuntimeConfig, []);
   const [view, setView] = useState<View>('display');
   const [activeId, setActiveId] = useState('sat-am');
   const [displayMode, setDisplayMode] = useState<DisplayMode>('cached');
@@ -111,6 +115,47 @@ export default function Home() {
   const [setupComplete, setSetupComplete] = useState(false);
   const [refreshVersion, setRefreshVersion] = useState(0);
   const [deviceMode, setDeviceMode] = useState(false);
+  const [authToken, setAuthToken] = useState<string | null>(null);
+  const [remoteProgrammes, setRemoteProgrammes] = useState<RemoteProgramme[]>([]);
+  const [remoteDevice, setRemoteDevice] = useState<RemoteDevice | null>(null);
+  const [adminMessage, setAdminMessage] = useState('');
+  const [adminError, setAdminError] = useState('');
+  const [adminBusy, setAdminBusy] = useState(false);
+
+  const loadRemoteState = useCallback(async (token: string) => {
+    setAdminError('');
+    try {
+      const state = await loadAdminState(runtimeConfig, token);
+      setRemoteProgrammes(state.programmes);
+      setRemoteDevice(state.device);
+    } catch (error) {
+      setAdminError(error instanceof Error ? error.message : 'Unable to load the control plane.');
+    }
+  }, [runtimeConfig]);
+
+  const onCredential = useCallback((token: string) => {
+    setAuthToken(token);
+    void loadRemoteState(token);
+  }, [loadRemoteState]);
+
+  const runRemoteAction = useCallback(async (action: Record<string, unknown>) => {
+    if (!authToken) {
+      setAdminError('Sign in with an approved Google Workspace account first.');
+      return;
+    }
+    setAdminBusy(true);
+    setAdminMessage('');
+    setAdminError('');
+    try {
+      const device = await issueDeviceAction(runtimeConfig, authToken, action);
+      setRemoteDevice(device);
+      setAdminMessage(`Updated revision ${device.revision}. The Pi will poll within ${device.pollIntervalSeconds} seconds.`);
+    } catch (error) {
+      setAdminError(error instanceof Error ? error.message : 'Unable to update the display.');
+    } finally {
+      setAdminBusy(false);
+    }
+  }, [authToken, runtimeConfig]);
 
   useEffect(() => {
     setLastRefresh(new Date());
@@ -200,6 +245,10 @@ export default function Home() {
       {view === 'control' && (
         <ControlView
           activeId={activeId}
+          adminBusy={adminBusy}
+          adminError={adminError}
+          adminMessage={adminMessage}
+          authToken={authToken}
           displayMode={displayMode}
           lastRefresh={lastRefresh}
           onAddEvent={() => setSpecialEvent((current) => !current)}
@@ -209,7 +258,17 @@ export default function Home() {
             setView('display');
           }}
           onRefresh={refreshDisplay}
+          onRemoteAction={runRemoteAction}
+          onSignOut={() => {
+            signOutGoogle();
+            setAuthToken(null);
+            setRemoteDevice(null);
+            setRemoteProgrammes([]);
+          }}
           onSaveSource={saveSource}
+          onCredential={onCredential}
+          remoteDevice={remoteDevice}
+          remoteProgrammes={remoteProgrammes}
           refreshing={refreshing}
           setSlidesUrl={setSlidesUrl}
           slidesUrl={slidesUrl}
@@ -381,43 +440,84 @@ function AllocationBoard({ active, allocations }: { active: Programme; allocatio
 
 function ControlView({
   activeId,
+  adminBusy,
+  adminError,
+  adminMessage,
+  authToken,
   displayMode,
   lastRefresh,
   onAddEvent,
   onDisplayMode,
   onPreview,
   onRefresh,
+  onRemoteAction,
+  onSignOut,
   onSaveSource,
+  onCredential,
+  remoteDevice,
+  remoteProgrammes,
   refreshing,
   setSlidesUrl,
   slidesUrl,
   specialEvent,
 }: {
   activeId: string;
+  adminBusy: boolean;
+  adminError: string;
+  adminMessage: string;
+  authToken: string | null;
   displayMode: DisplayMode;
   lastRefresh: Date | null;
   onAddEvent: () => void;
   onDisplayMode: (mode: DisplayMode) => void;
   onPreview: (id: string) => void;
   onRefresh: () => void;
+  onRemoteAction: (action: Record<string, unknown>) => void;
+  onSignOut: () => void;
   onSaveSource: () => void;
+  onCredential: (token: string) => void;
+  remoteDevice: RemoteDevice | null;
+  remoteProgrammes: RemoteProgramme[];
   refreshing: boolean;
   setSlidesUrl: (value: string) => void;
   slidesUrl: string;
   specialEvent: boolean;
 }) {
+  const [eventName, setEventName] = useState('Club Championships');
+  const programmeIds = new Set(remoteProgrammes.map((programme) => programme.programmeId));
   return (
     <section className="mx-auto max-w-7xl px-4 py-8 sm:px-7 lg:py-12">
       <div className="mb-8 flex flex-col justify-between gap-4 sm:flex-row sm:items-end">
         <div>
           <Badge className="mb-3 bg-tennis text-court-ink">Committee demo</Badge>
           <h1 className="font-display text-3xl font-black tracking-tight sm:text-5xl">Control room</h1>
-          <p className="mt-2 max-w-2xl text-sm leading-6 text-white/55 sm:text-base">Manage what the clubhouse TV shows without touching the Raspberry Pi. This public demonstration stores changes only in your browser.</p>
+          <p className="mt-2 max-w-2xl text-sm leading-6 text-white/55 sm:text-base">Manage what the clubhouse TV shows without touching the Raspberry Pi. Changes are revisioned, audited and applied on its next poll.</p>
         </div>
         <Button className="bg-tennis text-court-ink hover:bg-tennis/85" onClick={onRefresh} size="lg">
           <RefreshCw className={refreshing ? 'animate-spin' : ''} /> Refresh TV now
         </Button>
       </div>
+
+      <Card className="mb-5 border-0 bg-white text-court-ink ring-0">
+        <CardHeader className="border-b border-black/5">
+          <CardTitle className="flex items-center gap-2"><ShieldCheck className="text-club-green" /> Committee access</CardTitle>
+          <CardDescription>Only approved Google Workspace accounts can change a display. The ID token is verified by the AWS control API and held in memory by this browser.</CardDescription>
+        </CardHeader>
+        <CardContent className="flex flex-wrap items-center justify-between gap-4">
+          {authToken ? (
+            <div className="flex flex-wrap items-center gap-3">
+              <Badge className="bg-emerald-100 text-emerald-800">Signed in</Badge>
+              <Button onClick={onSignOut} variant="outline">Sign out</Button>
+            </div>
+          ) : (
+            <GoogleSignIn clientId={getRuntimeConfig().googleClientId} onCredential={onCredential} />
+          )}
+          <div className="max-w-xl text-right text-xs text-court-ink/50">
+            {adminMessage && <p className="text-emerald-700">{adminMessage}</p>}
+            {adminError && <p className="text-red-700">{adminError}</p>}
+          </div>
+        </CardContent>
+      </Card>
 
       <div className="grid gap-5 lg:grid-cols-[1.25fr_.75fr]">
         <Card className="border-0 bg-white text-court-ink ring-0">
@@ -426,22 +526,26 @@ function ControlView({
             <CardDescription>Eight recurring court-allocation sessions. Previewing a session does not change its saved schedule.</CardDescription>
           </CardHeader>
           <CardContent className="grid gap-2 sm:grid-cols-2">
-            {programmes.map((programme) => (
-              <button
-                className={`group flex items-center justify-between rounded-xl border p-3 text-left transition hover:border-club-green/40 hover:bg-green-50 ${programme.id === activeId ? 'border-club-green/40 bg-green-50' : 'border-black/8'}`}
-                key={programme.id}
-                onClick={() => onPreview(programme.id)}
-              >
-                <div>
-                  <div className="flex items-center gap-2">
-                    <span className="font-bold">{programme.name}</span>
-                    {programme.id === activeId && <Badge className="bg-club-green text-white">On screen</Badge>}
+            {programmes.map((programme) => {
+              const remoteProgramme = remoteProgrammes.find((item) => item.programmeId === programme.id);
+              return (
+                <div className={`group flex items-center justify-between gap-2 rounded-xl border p-3 transition hover:border-club-green/40 hover:bg-green-50 ${programme.id === activeId ? 'border-club-green/40 bg-green-50' : 'border-black/8'}`} key={programme.id}>
+                  <button className="min-w-0 flex-1 text-left" onClick={() => onPreview(programme.id)}>
+                    <div className="flex items-center gap-2">
+                      <span className="font-bold">{programme.name}</span>
+                      {programme.id === activeId && <Badge className="bg-club-green text-white">Preview</Badge>}
+                    </div>
+                    <p className="mt-1 text-xs text-court-ink/50">{programme.time} · {programme.activities.join(' + ')}</p>
+                  </button>
+                  <div className="flex items-center gap-1">
+                    <Eye className="hidden size-4 text-court-ink/25 transition group-hover:text-club-green sm:block" />
+                    {authToken && programmeIds.has(programme.id) && remoteProgramme && (
+                      <Button disabled={adminBusy} onClick={() => onRemoteAction({ action: 'show_programme', programmeId: remoteProgramme.programmeId })} size="sm">Show now</Button>
+                    )}
                   </div>
-                  <p className="mt-1 text-xs text-court-ink/50">{programme.time} · {programme.activities.join(' + ')}</p>
                 </div>
-                <Eye className="size-4 text-court-ink/25 transition group-hover:text-club-green" />
-              </button>
-            ))}
+              );
+            })}
           </CardContent>
         </Card>
 
@@ -454,8 +558,13 @@ function ControlView({
             <CardContent className="space-y-3">
               <StatusRow icon={Wifi} label="Network" value="Connected" />
               <StatusRow icon={CheckCircle2} label="Player" value="Healthy" />
-              <StatusRow icon={Clock3} label="Last refresh" value={lastRefresh ? formatRefreshTime(lastRefresh) : 'Waiting'} />
-              <StatusRow icon={Cloud} label="Content cache" value="Ready offline" />
+              <StatusRow icon={Clock3} label="Revision" value={remoteDevice ? String(remoteDevice.revision) : 'Sign in to inspect'} />
+              <StatusRow icon={Cloud} label="Source" value={remoteDevice?.activeSelection?.name ?? (lastRefresh ? formatRefreshTime(lastRefresh) : 'Waiting')} />
+              <div className="grid grid-cols-2 gap-2 pt-2">
+                <Button disabled={!authToken || adminBusy} onClick={() => onRemoteAction({ action: 'return_to_schedule' })} size="sm" variant="secondary">Return to schedule</Button>
+                <Button disabled={!authToken || adminBusy} onClick={() => onRemoteAction({ action: 'show_honours' })} size="sm" variant="secondary">Show honours</Button>
+                <Button className="col-span-2" disabled={!authToken || adminBusy} onClick={() => onRemoteAction({ action: 'refresh' })} size="sm" variant="outline"><RefreshCw /> Refresh TV now</Button>
+              </div>
             </CardContent>
           </Card>
 
@@ -465,9 +574,17 @@ function ControlView({
               <CardDescription>Overrides and additions take priority over the usual weekly programme.</CardDescription>
             </CardHeader>
             <CardContent>
-              <Button className="w-full" onClick={onAddEvent} variant={specialEvent ? 'secondary' : 'outline'}>
-                {specialEvent ? <><Check /> Club Championships added</> : <><Plus /> Try an event override</>}
-              </Button>
+              <div className="space-y-2">
+                <Input onChange={(event) => setEventName(event.target.value)} value={eventName} />
+                <Button className="w-full" disabled={!authToken || adminBusy || !remoteDevice} onClick={() => {
+                  const selected = remoteDevice?.activeSelection?.programmeId ?? activeId;
+                  onAddEvent();
+                  onRemoteAction({ action: 'set_event_override', programmeId: selected, eventName });
+                }} variant={specialEvent ? 'secondary' : 'outline'}>
+                  {specialEvent ? <><Check /> Club Championships added</> : <><Plus /> Show as event override</>}
+                </Button>
+                {!authToken && <p className="text-xs text-court-ink/45">Sign in to publish an override.</p>}
+              </div>
             </CardContent>
           </Card>
         </div>

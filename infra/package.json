@@ -6,6 +6,7 @@
   "scripts": {
     "build": "tsc",
     "seed": "node scripts/put-device-config.mjs",
+    "seed-programmes": "node scripts/put-programmes.mjs",
     "test": "node --test test/*.test.mjs",
     "synth": "cdk synth"
   },
@@ -13,7 +14,8 @@
     "@aws-sdk/client-dynamodb": "^3.883.0",
     "@aws-sdk/lib-dynamodb": "^3.883.0",
     "aws-cdk-lib": "2.271.0",
-    "constructs": "10.8.1"
+    "constructs": "10.8.1",
+    "google-auth-library": "^10.5.0"
   },
   "devDependencies": {
     "@types/node": "^22.19.19",
