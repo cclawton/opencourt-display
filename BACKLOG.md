@@ -30,3 +30,9 @@ Discovery required before implementation:
 - Define behaviour when the booking system is unavailable or its data is stale.
 
 This should remain an optional integration so clubs without a compatible booking system can use the core signage application unchanged.
+
+## Exact AWS cost allocation
+
+After AWS exposes the deployed `Application` tag in Billing, activate it as a user-defined cost-allocation tag and change the pilot budget from its conservative Lambda/DynamoDB/CloudWatch service-family filter to `user:Application$OpenCourt Display`. Verify the tag is active and producing cost data before switching, because AWS may take up to 24 hours to make a newly applied tag available for activation.
+
+When static control-room hosting is added, ensure its S3 and CloudFront resources use the same activated tag so the application-level budget includes the complete OpenCourt workload without including unrelated personal-account S3 or CloudFront costs.

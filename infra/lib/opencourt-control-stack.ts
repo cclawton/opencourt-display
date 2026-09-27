@@ -101,6 +101,9 @@ export class OpenCourtControlStack extends cdk.Stack {
         budgetType: 'COST',
         timeUnit: 'MONTHLY',
         budgetLimit: { amount: 10, unit: 'USD' },
+        costFilters: {
+          Service: ['AWS Lambda', 'Amazon DynamoDB', 'AmazonCloudWatch'],
+        },
       },
       notificationsWithSubscribers: [1, 5, 10].map((threshold) => ({
         notification: {
