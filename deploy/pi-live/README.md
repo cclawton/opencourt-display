@@ -46,6 +46,8 @@ Increase `revision` whenever the selected source should reload. Chromium is rest
 
 Google returned a 403 when a published presentation was placed inside an iframe under a local player. The supervisor therefore opens Slides directly as Chromium's top-level page, which is also how the legacy kiosk operated. Local images continue through `player.html` so their expected pixel dimensions are checked before display.
 
+Remote JPEG/PNG sources from the control-room image library are downloaded over HTTPS into `/var/lib/opencourt/assets`. The player verifies the MIME type, 20 MB size limit, encoded pixel dimensions and SHA-256 checksum before an atomic cache replacement. If download or verification fails, the active Chromium page and last-known-good local image remain unchanged.
+
 ## Optional remote configuration
 
 `/var/lib/opencourt/remote.json` is a separate bootstrap file so a failed or incomplete remote document cannot remove the device's control endpoint. Remote polling is disabled by default:

@@ -45,7 +45,7 @@
         const revision = params.get('revision') || '';
         const status = document.querySelector('#status');
 
-        if (!source || source.includes('/') || source.includes('\\')) {
+        if (!source || !/^(?:assets\/)?[A-Za-z0-9][A-Za-z0-9._-]*$/.test(source)) {
           status.textContent = 'The configured display image is invalid.';
           return;
         }

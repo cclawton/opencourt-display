@@ -46,9 +46,11 @@ The first AWS infrastructure increment is implemented in `infra/`: an on-demand 
 
 The image uses Raspberry Pi OS Trixie components, Cage as the minimal Wayland kiosk and Chromium as the player. A first-boot service collects Wi-Fi, administrator and initial Slides settings locally. The kiosk is supervised by `systemd` and restarts after failure or reboot.
 
-The image currently uses the native Google Slides player. A production cached-content provider is the next implementation milestone; its interface should support PDF export or slide thumbnails with atomic last-known-good replacement.
+The image currently uses the native Google Slides player. Remote JPEG/PNG content has an atomic last-known-good cache; cached Google Slides rendering through PDF export or slide thumbnails remains a future milestone.
 
 For 4K honours-board content, the image provider must retrieve or bundle the original 3840×2160 file and verify its pixel dimensions before atomic replacement. The Google Slides player is not used for that source because the observed live player supplied a 2048×1152 derivative.
+
+Committee members upload JPEG/PNG files through the authenticated control room. The API issues a short-lived, content-type- and checksum-bound S3 PUT URL; after upload, it verifies the object metadata before marking the asset ready. CloudFront exposes only the display file, while S3 remains private. A Pi downloads the immutable URL, independently verifies dimensions and SHA-256, writes it atomically to its local cache and changes Chromium only after validation. An arbitrary image can be shown temporarily, but only an exact 3840×2160 asset can replace the honours-board default.
 
 ## Scheduling model
 

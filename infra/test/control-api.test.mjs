@@ -28,6 +28,22 @@ const programme = {
   sortOrder: 1,
 };
 
+const asset = {
+  assetId: '11111111-1111-4111-8111-111111111111',
+  name: '2026 honours board',
+  mimeType: 'image/png',
+  byteSize: 12345,
+  width: 3840,
+  height: 2160,
+  objectKey: 'display-assets/11111111-1111-4111-8111-111111111111.png',
+  publicUrl: 'https://display.example/display-assets/11111111-1111-4111-8111-111111111111.png',
+  sha256: 'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa',
+  checksumBase64: 'qqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqo=',
+  status: 'ready',
+  createdAt: '2026-09-27T01:00:00.000Z',
+  createdBy: 'admin@example.test',
+};
+
 function event(path, headers = {}, method = 'GET', body) {
   return { rawPath: path, headers, body: body === undefined ? undefined : JSON.stringify(body), requestContext: { http: { method } } };
 }
@@ -37,6 +53,12 @@ function dependencies(overrides = {}) {
     getDevice: async () => item,
     getProgramme: async () => programme,
     listProgrammes: async () => [programme],
+    getAsset: async () => asset,
+    listAssets: async () => [asset],
+    putAsset: async () => undefined,
+    completeAsset: async () => undefined,
+    createUploadUrl: async () => 'https://uploads.example/signed',
+    headAsset: async (value) => ({ byteSize: value.byteSize, mimeType: value.mimeType, checksumBase64: value.checksumBase64 }),
     updateDevice: async () => undefined,
     verifyToken: async (token) => {
       if (token !== 'valid-token') throw new Error('unexpected token');
@@ -77,6 +99,48 @@ test('returns authenticated programme and device status', async () => {
   assert.equal(JSON.parse(deviceResult.body).actor.email, 'admin@example.test');
 });
 
+test('creates, verifies and lists authenticated image uploads', async () => {
+  process.env.ASSET_PUBLIC_BASE_URL = 'https://display.example';
+  let pending;
+  let completed;
+  const handler = createHandler(dependencies({
+    getAsset: async () => pending,
+    listAssets: async () => [asset, { ...asset, assetId: '22222222-2222-4222-8222-222222222222', status: 'pending' }],
+    putAsset: async (value) => { pending = value; },
+    completeAsset: async (value) => { completed = value; pending = value; },
+    newAssetId: () => '33333333-3333-4333-8333-333333333333',
+  }));
+  const headers = { authorization: 'Bearer valid-token' };
+
+  const createResult = await handler(event('/admin/assets/uploads', headers, 'POST', {
+    name: 'Corrected honours board.png', mimeType: 'image/png', byteSize: 12345, width: 3840, height: 2160,
+    sha256: 'bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb',
+  }));
+  assert.equal(createResult.statusCode, 201);
+  assert.equal(pending.status, 'pending');
+  assert.equal(pending.createdBy, 'admin@example.test');
+  assert.equal(JSON.parse(createResult.body).uploadUrl, 'https://uploads.example/signed');
+
+  const completeResult = await handler(event('/admin/assets/33333333-3333-4333-8333-333333333333/complete', headers, 'POST', {}));
+  assert.equal(completeResult.statusCode, 200);
+  assert.equal(completed.status, 'ready');
+
+  const listResult = await handler(event('/admin/assets', headers));
+  assert.equal(listResult.statusCode, 200);
+  assert.equal(JSON.parse(listResult.body).assets.length, 1);
+});
+
+test('rejects unsafe image upload metadata and mismatched stored objects', async () => {
+  const headers = { authorization: 'Bearer valid-token' };
+  const handler = createHandler(dependencies({
+    getAsset: async () => ({ ...asset, status: 'pending' }),
+    headAsset: async () => ({ byteSize: 999, mimeType: 'image/png', checksumBase64: asset.checksumBase64 }),
+  }));
+  assert.equal((await handler(event('/admin/assets/uploads', headers, 'POST', { name: 'x', mimeType: 'image/svg+xml', byteSize: 2, width: 10, height: 10, sha256: asset.sha256 }))).statusCode, 400);
+  assert.equal((await handler(event('/admin/assets/uploads', headers, 'POST', { name: 'x', mimeType: 'image/png', byteSize: 30_000_000, width: 3840, height: 2160, sha256: asset.sha256 }))).statusCode, 400);
+  assert.equal((await handler(event('/admin/assets/11111111-1111-4111-8111-111111111111/complete', headers, 'POST', {}))).statusCode, 409);
+});
+
 test('show programme increments revision and records an audit event', async () => {
   let update;
   const handler = createHandler(dependencies({ updateDevice: async (value) => { update = value; } }));
@@ -100,6 +164,19 @@ test('refresh, event override and return-to-schedule produce safe revisions', as
   assert.equal(updates[1].item.override.name, 'Club Championships');
   assert.equal(updates[2].item.source.type, 'image');
   assert.equal(updates[2].item.override, null);
+});
+
+test('shows arbitrary images and makes only exact 4K images the honours default', async () => {
+  const updates = [];
+  const handler = createHandler(dependencies({ updateDevice: async (value) => updates.push(value) }));
+  const headers = { authorization: 'Bearer valid-token' };
+  assert.equal((await handler(event('/admin/devices/honours-board-tv/actions', headers, 'POST', { action: 'show_image', assetId: asset.assetId }))).statusCode, 200);
+  assert.equal(updates[0].item.source.url, asset.publicUrl);
+  assert.equal(updates[0].item.defaultSource.url, 'honours-board.jpg');
+  assert.equal((await handler(event('/admin/devices/honours-board-tv/actions', headers, 'POST', { action: 'set_honours_image', assetId: asset.assetId }))).statusCode, 200);
+  assert.equal(updates[1].item.defaultSource.url, asset.publicUrl);
+  assert.equal(updates[1].item.defaultSource.expectedWidth, 3840);
+  assert.equal(updates[1].item.defaultSource.expectedHeight, 2160);
 });
 
 test('rejects unsupported methods, malformed bodies and unknown routes', async () => {

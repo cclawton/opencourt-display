@@ -1,5 +1,6 @@
 import importlib.util
 from importlib.machinery import SourceFileLoader
+import hashlib
 import json
 from pathlib import Path
 import tempfile
@@ -87,6 +88,88 @@ class PlayerSupervisorTests(unittest.TestCase):
             )
             with self.assertRaises(PLAYER.ConfigError):
                 PLAYER.load_config(config_path)
+
+    def test_remote_png_is_dimension_checked_and_cached_atomically(self):
+        png = (
+            b"\x89PNG\r\n\x1a\n"
+            + b"\x00\x00\x00\rIHDR"
+            + (3840).to_bytes(4, "big")
+            + (2160).to_bytes(4, "big")
+            + b"\x08\x02\x00\x00\x00"
+        )
+
+        class Response:
+            headers = {"Content-Length": str(len(png)), "Content-Type": "image/png"}
+
+            def __enter__(self):
+                return self
+
+            def __exit__(self, *_args):
+                return False
+
+            def read(self, _limit):
+                return png
+
+        with tempfile.TemporaryDirectory() as directory:
+            original_asset_dir = PLAYER.ASSET_DIR
+            PLAYER.ASSET_DIR = Path(directory) / "assets"
+            try:
+                relative = PLAYER.cache_remote_image(
+                    {
+                        "url": "https://display.example/honours.png",
+                        "expectedWidth": 3840,
+                        "expectedHeight": 2160,
+                        "sha256": hashlib.sha256(png).hexdigest(),
+                    },
+                    "9",
+                    lambda _request, timeout: Response(),
+                )
+            finally:
+                PLAYER.ASSET_DIR = original_asset_dir
+
+            self.assertTrue(relative.startswith("assets/"))
+            self.assertEqual((Path(directory) / relative).read_bytes(), png)
+
+    def test_remote_image_rejects_wrong_dimensions_and_non_https(self):
+        with self.assertRaises(PLAYER.ConfigError):
+            PLAYER.cache_remote_image({"url": "http://display.example/board.jpg"}, "1")
+
+        png = b"\x89PNG\r\n\x1a\n" + b"\x00" * 8 + (1920).to_bytes(4, "big") + (1080).to_bytes(4, "big")
+
+        class Response:
+            headers = {"Content-Type": "image/png"}
+
+            def __enter__(self):
+                return self
+
+            def __exit__(self, *_args):
+                return False
+
+            def read(self, _limit):
+                return png
+
+        with tempfile.TemporaryDirectory() as directory:
+            original_asset_dir = PLAYER.ASSET_DIR
+            PLAYER.ASSET_DIR = Path(directory) / "assets"
+            try:
+                with self.assertRaises(PLAYER.ConfigError):
+                    PLAYER.cache_remote_image(
+                        {"url": "https://display.example/board.png", "expectedWidth": 3840},
+                        "1",
+                        lambda _request, timeout: Response(),
+                    )
+                with self.assertRaises(PLAYER.ConfigError):
+                    PLAYER.cache_remote_image(
+                        {
+                            "url": "https://display.example/board.png",
+                            "expectedWidth": 1920,
+                            "sha256": "0" * 64,
+                        },
+                        "2",
+                        lambda _request, timeout: Response(),
+                    )
+            finally:
+                PLAYER.ASSET_DIR = original_asset_dir
 
     def test_remote_settings_are_optional_and_require_https(self):
         with tempfile.TemporaryDirectory() as directory:

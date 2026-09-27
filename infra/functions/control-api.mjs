@@ -1,16 +1,24 @@
 import { DynamoDBClient } from '@aws-sdk/client-dynamodb';
 import {
   GetCommand,
+  PutCommand,
   ScanCommand,
   TransactWriteCommand,
   DynamoDBDocumentClient,
 } from '@aws-sdk/lib-dynamodb';
+import { HeadObjectCommand, PutObjectCommand, S3Client } from '@aws-sdk/client-s3';
+import { getSignedUrl } from '@aws-sdk/s3-request-presigner';
+import { randomUUID } from 'node:crypto';
 import { OAuth2Client } from 'google-auth-library';
 
 const documentClient = DynamoDBDocumentClient.from(new DynamoDBClient({}));
+const s3Client = new S3Client({});
 const googleClient = new OAuth2Client();
 const DEVICE_ID_PATTERN = /^[a-z0-9][a-z0-9-]{1,62}$/;
 const PROGRAMME_ID_PATTERN = /^[a-z0-9][a-z0-9-]{1,62}$/;
+const ASSET_ID_PATTERN = /^[a-f0-9-]{36}$/;
+const IMAGE_MIME_TYPES = new Map([['image/jpeg', 'jpg'], ['image/png', 'png']]);
+const MAX_IMAGE_BYTES = 20 * 1024 * 1024;
 const MAX_BODY_BYTES = 8 * 1024;
 
 class HttpError extends Error {
@@ -64,6 +72,10 @@ function deviceIdFromActionPath(rawPath = '') {
   return decodePathId(rawPath, /^\/admin\/devices\/([^/]+)\/actions$/, DEVICE_ID_PATTERN);
 }
 
+function assetIdFromCompletePath(rawPath = '') {
+  return decodePathId(rawPath, /^\/admin\/assets\/([^/]+)\/complete$/, ASSET_ID_PATTERN);
+}
+
 function publicConfig(item) {
   return {
     schemaVersion: item.schemaVersion,
@@ -96,6 +108,22 @@ function publicProgramme(item) {
   };
 }
 
+function publicAsset(item) {
+  return {
+    assetId: item.assetId,
+    name: item.name,
+    mimeType: item.mimeType,
+    byteSize: item.byteSize,
+    width: item.width,
+    height: item.height,
+    publicUrl: item.publicUrl,
+    sha256: item.sha256,
+    status: item.status,
+    createdAt: item.createdAt,
+    createdBy: item.createdBy,
+  };
+}
+
 function parseBody(event) {
   if (!event?.body || Buffer.byteLength(event.body, 'utf8') > MAX_BODY_BYTES) {
     throw new HttpError(400, 'invalid_request_body');
@@ -117,7 +145,15 @@ function bearerToken(headers = {}) {
 }
 
 function validateSource(source) {
-  if (source?.type === 'image' && /^[a-zA-Z0-9][a-zA-Z0-9._-]*$/.test(source.url ?? '')) return source;
+  if (source?.type === 'image') {
+    if (/^[a-zA-Z0-9][a-zA-Z0-9._/-]*$/.test(source.url ?? '') && !source.url.includes('..')) return source;
+    try {
+      const url = new URL(source.url);
+      if (url.protocol === 'https:' && !url.username && !url.password && ['image/jpeg', 'image/png'].includes(source.mimeType)) return source;
+    } catch {
+      // Use a generic error below so stored configuration details are not exposed.
+    }
+  }
   if (source?.type === 'google_slides') {
     try {
       const url = new URL(source.url);
@@ -127,6 +163,36 @@ function validateSource(source) {
     }
   }
   throw new HttpError(500, 'invalid_stored_source');
+}
+
+function validateUploadRequest(value) {
+  const name = typeof value.name === 'string' ? value.name.trim() : '';
+  const mimeType = typeof value.mimeType === 'string' ? value.mimeType.toLowerCase() : '';
+  const byteSize = Number(value.byteSize);
+  const width = Number(value.width);
+  const height = Number(value.height);
+  const sha256 = typeof value.sha256 === 'string' ? value.sha256.toLowerCase() : '';
+  if (name.length < 1 || name.length > 120) throw new HttpError(400, 'invalid_image_name');
+  if (!IMAGE_MIME_TYPES.has(mimeType)) throw new HttpError(400, 'unsupported_image_type');
+  if (!Number.isSafeInteger(byteSize) || byteSize < 1 || byteSize > MAX_IMAGE_BYTES) throw new HttpError(400, 'invalid_image_size');
+  if (!Number.isSafeInteger(width) || !Number.isSafeInteger(height) || width < 1 || height < 1 || width > 7680 || height > 4320) {
+    throw new HttpError(400, 'invalid_image_dimensions');
+  }
+  if (!/^[a-f0-9]{64}$/.test(sha256)) throw new HttpError(400, 'invalid_image_checksum');
+  return { name, mimeType, byteSize, width, height, sha256 };
+}
+
+function imageSource(asset) {
+  if (!asset || asset.status !== 'ready') throw new HttpError(404, 'image_not_found');
+  return validateSource({
+    type: 'image',
+    url: asset.publicUrl,
+    mimeType: asset.mimeType,
+    expectedWidth: asset.width,
+    expectedHeight: asset.height,
+    assetId: asset.assetId,
+    sha256: asset.sha256,
+  });
 }
 
 function eventName(value) {
@@ -140,7 +206,7 @@ function selectProgramme(programme) {
   return validateSource(programme.source);
 }
 
-function buildChange(current, action, programme, actor, now) {
+function buildChange(current, action, programme, asset, actor, now) {
   if (!current) throw new HttpError(404, 'device_not_found');
   const revision = current.revision + 1;
   let source = current.source;
@@ -163,11 +229,19 @@ function buildChange(current, action, programme, actor, now) {
     const name = eventName(action.eventName);
     override = { name, programmeId: programme.programmeId, startedAt: now };
     activeSelection = { kind: 'event', programmeId: programme.programmeId, name };
+  } else if (action.action === 'show_image') {
+    source = imageSource(asset);
+    activeSelection = { kind: 'image', assetId: asset.assetId, name: asset.name };
+  } else if (action.action === 'set_honours_image') {
+    if (asset?.width !== 3840 || asset?.height !== 2160) throw new HttpError(400, 'honours_image_must_be_4k');
+    source = imageSource(asset);
+    activeSelection = { kind: 'honours', assetId: asset.assetId, name: asset.name };
   } else {
     throw new HttpError(400, 'unsupported_action');
   }
 
   const item = { ...current, revision, source, activeSelection, override, updatedAt: now, updatedBy: actor.email };
+  if (action.action === 'set_honours_image') item.defaultSource = source;
   const audit = {
     deviceId: current.deviceId,
     changedAt: `${now}#${String(revision).padStart(12, '0')}`,
@@ -180,7 +254,21 @@ function buildChange(current, action, programme, actor, now) {
   return { item, audit };
 }
 
-export function createHandler({ getDevice, getProgramme, listProgrammes, updateDevice, verifyToken, now = () => new Date().toISOString() }) {
+export function createHandler({
+  getDevice,
+  getProgramme,
+  listProgrammes,
+  getAsset,
+  listAssets,
+  putAsset,
+  completeAsset,
+  createUploadUrl,
+  headAsset,
+  updateDevice,
+  verifyToken,
+  now = () => new Date().toISOString(),
+  newAssetId = randomUUID,
+}) {
   return async function handle(event) {
     try {
       const method = event?.requestContext?.http?.method;
@@ -206,6 +294,53 @@ export function createHandler({ getDevice, getProgramme, listProgrammes, updateD
         return response(200, { programmes: items.sort((a, b) => (a.sortOrder ?? 999) - (b.sortOrder ?? 999)).map(publicProgramme) });
       }
 
+      if (method === 'GET' && rawPath === '/admin/assets') {
+        const items = await listAssets();
+        return response(200, {
+          assets: items.filter((item) => item.status === 'ready').sort((a, b) => String(b.createdAt).localeCompare(String(a.createdAt))).map(publicAsset),
+        });
+      }
+
+      if (method === 'POST' && rawPath === '/admin/assets/uploads') {
+        const upload = validateUploadRequest(parseBody(event));
+        const assetId = newAssetId();
+        const extension = IMAGE_MIME_TYPES.get(upload.mimeType);
+        const objectKey = `display-assets/${assetId}.${extension}`;
+        const createdAt = now();
+        const asset = {
+          assetId,
+          ...upload,
+          checksumBase64: Buffer.from(upload.sha256, 'hex').toString('base64'),
+          objectKey,
+          publicUrl: `${process.env.ASSET_PUBLIC_BASE_URL}/${objectKey}`,
+          status: 'pending',
+          createdAt,
+          createdBy: actor.email,
+        };
+        await putAsset(asset);
+        const uploadUrl = await createUploadUrl(asset);
+        return response(201, {
+          asset: publicAsset(asset),
+          uploadUrl,
+          uploadHeaders: { 'content-type': asset.mimeType, 'x-amz-checksum-sha256': asset.checksumBase64 },
+          expiresInSeconds: 300,
+        });
+      }
+
+      const completeAssetId = assetIdFromCompletePath(rawPath);
+      if (method === 'POST' && completeAssetId) {
+        const asset = await getAsset(completeAssetId);
+        if (!asset) return response(404, { error: 'image_not_found' });
+        if (asset.status === 'ready') return response(200, { asset: publicAsset(asset) });
+        const stored = await headAsset(asset);
+        if (stored.byteSize !== asset.byteSize || stored.mimeType !== asset.mimeType || stored.checksumBase64 !== asset.checksumBase64) {
+          throw new HttpError(409, 'uploaded_image_does_not_match');
+        }
+        const readyAsset = { ...asset, status: 'ready', verifiedAt: now() };
+        await completeAsset(readyAsset);
+        return response(200, { asset: publicAsset(readyAsset) });
+      }
+
       const adminDeviceId = deviceIdFromAdminPath(rawPath);
       if (method === 'GET' && adminDeviceId) {
         const item = await getDevice(adminDeviceId);
@@ -217,12 +352,15 @@ export function createHandler({ getDevice, getProgramme, listProgrammes, updateD
       if (method === 'POST' && actionDeviceId) {
         const action = parseBody(event);
         const needsProgramme = ['show_programme', 'set_event_override'].includes(action.action);
+        const needsAsset = ['show_image', 'set_honours_image'].includes(action.action);
         if (needsProgramme && !PROGRAMME_ID_PATTERN.test(action.programmeId ?? '')) throw new HttpError(400, 'invalid_programme_id');
-        const [current, programme] = await Promise.all([
+        if (needsAsset && !ASSET_ID_PATTERN.test(action.assetId ?? '')) throw new HttpError(400, 'invalid_asset_id');
+        const [current, programme, asset] = await Promise.all([
           getDevice(actionDeviceId),
           needsProgramme ? getProgramme(action.programmeId) : Promise.resolve(undefined),
+          needsAsset ? getAsset(action.assetId) : Promise.resolve(undefined),
         ]);
-        const change = buildChange(current, action, programme, actor, now());
+        const change = buildChange(current, action, programme, asset, actor, now());
         await updateDevice({ previousRevision: current.revision, ...change });
         return response(200, { device: adminDevice(change.item) });
       }
@@ -267,6 +405,38 @@ export const handler = createHandler({
   async listProgrammes() {
     const result = await documentClient.send(new ScanCommand({ TableName: process.env.PROGRAMME_TABLE, Limit: 50 }));
     return result.Items ?? [];
+  },
+  async getAsset(assetId) {
+    const result = await documentClient.send(new GetCommand({ TableName: process.env.ASSET_TABLE, Key: { assetId }, ConsistentRead: false }));
+    return result.Item;
+  },
+  async listAssets() {
+    const result = await documentClient.send(new ScanCommand({ TableName: process.env.ASSET_TABLE, Limit: 100 }));
+    return result.Items ?? [];
+  },
+  async putAsset(asset) {
+    await documentClient.send(new PutCommand({ TableName: process.env.ASSET_TABLE, Item: asset, ConditionExpression: 'attribute_not_exists(assetId)' }));
+  },
+  async completeAsset(asset) {
+    await documentClient.send(new PutCommand({
+      TableName: process.env.ASSET_TABLE,
+      Item: asset,
+      ConditionExpression: '#status = :pending',
+      ExpressionAttributeNames: { '#status': 'status' },
+      ExpressionAttributeValues: { ':pending': 'pending' },
+    }));
+  },
+  async createUploadUrl(asset) {
+    return getSignedUrl(s3Client, new PutObjectCommand({
+      Bucket: process.env.ASSET_BUCKET,
+      Key: asset.objectKey,
+      ContentType: asset.mimeType,
+      ChecksumSHA256: asset.checksumBase64,
+    }), { expiresIn: 300 });
+  },
+  async headAsset(asset) {
+    const result = await s3Client.send(new HeadObjectCommand({ Bucket: process.env.ASSET_BUCKET, Key: asset.objectKey, ChecksumMode: 'ENABLED' }));
+    return { byteSize: result.ContentLength, mimeType: result.ContentType, checksumBase64: result.ChecksumSHA256 };
   },
   async updateDevice({ previousRevision, item, audit }) {
     await documentClient.send(new TransactWriteCommand({

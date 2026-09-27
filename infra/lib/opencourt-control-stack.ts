@@ -104,12 +104,29 @@ export class OpenCourtControlStack extends cdk.Stack {
       encryption: dynamodb.TableEncryption.AWS_MANAGED,
     });
 
+    const assetTable = new dynamodb.Table(this, 'DisplayAssets', {
+      tableName: cdk.Fn.join('-', [resourcePrefix, 'display-assets']),
+      partitionKey: { name: 'assetId', type: dynamodb.AttributeType.STRING },
+      billingMode: dynamodb.BillingMode.PAY_PER_REQUEST,
+      pointInTimeRecoverySpecification: { pointInTimeRecoveryEnabled: false },
+      deletionProtection: true,
+      removalPolicy: cdk.RemovalPolicy.RETAIN,
+      encryption: dynamodb.TableEncryption.AWS_MANAGED,
+    });
+
     const websiteBucket = new s3.Bucket(this, 'ControlRoomWebsite', {
       blockPublicAccess: s3.BlockPublicAccess.BLOCK_ALL,
       encryption: s3.BucketEncryption.S3_MANAGED,
       enforceSSL: true,
       objectOwnership: s3.ObjectOwnership.BUCKET_OWNER_ENFORCED,
       removalPolicy: cdk.RemovalPolicy.RETAIN,
+      cors: [{
+        allowedMethods: [s3.HttpMethods.PUT],
+        allowedOrigins: ['*'],
+        allowedHeaders: ['content-type', 'x-amz-checksum-sha256'],
+        exposedHeaders: ['ETag'],
+        maxAge: 300,
+      }],
     });
 
     const functionName = cdk.Fn.join('-', [resourcePrefix, 'control-api']);
@@ -132,6 +149,8 @@ export class OpenCourtControlStack extends cdk.Stack {
         DEVICE_CONFIG_TABLE: table.tableName,
         PROGRAMME_TABLE: programmeTable.tableName,
         AUDIT_TABLE: auditTable.tableName,
+        ASSET_TABLE: assetTable.tableName,
+        ASSET_BUCKET: websiteBucket.bucketName,
         GOOGLE_OAUTH_CLIENT_ID: googleOAuthClientId.valueAsString,
         COMMITTEE_ADMIN_EMAILS: committeeAdminEmails.valueAsString,
         GOOGLE_HOSTED_DOMAIN: googleHostedDomain.valueAsString,
@@ -144,6 +163,14 @@ export class OpenCourtControlStack extends cdk.Stack {
     controlApi.node.addDependency(table);
     table.grantReadData(controlApi);
     programmeTable.grantReadData(controlApi);
+    controlApi.addToRolePolicy(new iam.PolicyStatement({
+      actions: ['dynamodb:GetItem', 'dynamodb:PutItem', 'dynamodb:Scan'],
+      resources: [assetTable.tableArn],
+    }));
+    controlApi.addToRolePolicy(new iam.PolicyStatement({
+      actions: ['s3:GetObject', 's3:PutObject'],
+      resources: [websiteBucket.arnForObjects('display-assets/*')],
+    }));
     auditTable.grant(controlApi, 'dynamodb:PutItem');
     controlApi.addToRolePolicy(new iam.PolicyStatement({
       actions: ['dynamodb:TransactWriteItems'],
@@ -163,7 +190,7 @@ export class OpenCourtControlStack extends cdk.Stack {
     const securityHeaders = new cloudfront.ResponseHeadersPolicy(this, 'SecurityHeaders', {
       securityHeadersBehavior: {
         contentSecurityPolicy: {
-          contentSecurityPolicy: "default-src 'self'; script-src 'self' https://accounts.google.com/gsi/client; connect-src 'self' https://*.lambda-url.ap-southeast-2.on.aws; frame-src https://accounts.google.com/gsi/; img-src 'self' data: https://*.googleusercontent.com; style-src 'self' 'unsafe-inline'; object-src 'none'; base-uri 'none'; frame-ancestors 'none'",
+          contentSecurityPolicy: "default-src 'self'; script-src 'self' https://accounts.google.com/gsi/client; connect-src 'self' https://*.lambda-url.ap-southeast-2.on.aws https://*.s3.ap-southeast-2.amazonaws.com; frame-src https://accounts.google.com/gsi/; img-src 'self' data: https://*.googleusercontent.com; style-src 'self' 'unsafe-inline'; object-src 'none'; base-uri 'none'; frame-ancestors 'none'",
           override: true,
         },
         contentTypeOptions: { override: true },
@@ -192,6 +219,7 @@ export class OpenCourtControlStack extends cdk.Stack {
       ],
       priceClass: cloudfront.PriceClass.PRICE_CLASS_ALL,
     });
+    controlApi.addEnvironment('ASSET_PUBLIC_BASE_URL', `https://${distribution.distributionDomainName}`);
 
     new budgets.CfnBudget(this, 'MonthlyCostGuardrail', {
       budget: {
@@ -200,7 +228,7 @@ export class OpenCourtControlStack extends cdk.Stack {
         timeUnit: 'MONTHLY',
         budgetLimit: { amount: 10, unit: 'USD' },
         costFilters: {
-          Service: ['AWS Lambda', 'Amazon DynamoDB', 'AmazonCloudWatch'],
+          Service: ['AWS Lambda', 'Amazon DynamoDB', 'AmazonCloudWatch', 'Amazon Simple Storage Service', 'Amazon CloudFront'],
         },
       },
       notificationsWithSubscribers: [1, 5, 10].map((threshold) => ({
@@ -244,6 +272,7 @@ export class OpenCourtControlStack extends cdk.Stack {
     new cdk.CfnOutput(this, 'DeviceConfigBaseUrl', { value: functionUrl.url });
     new cdk.CfnOutput(this, 'ProgrammeTableName', { value: programmeTable.tableName });
     new cdk.CfnOutput(this, 'AuditTableName', { value: auditTable.tableName });
+    new cdk.CfnOutput(this, 'AssetTableName', { value: assetTable.tableName });
     new cdk.CfnOutput(this, 'WebsiteBucketName', { value: websiteBucket.bucketName });
     new cdk.CfnOutput(this, 'ControlRoomUrl', { value: `https://${distribution.distributionDomainName}` });
     new cdk.CfnOutput(this, 'ControlRoomDistributionId', { value: distribution.distributionId });

@@ -11,10 +11,12 @@ The project began at Heatherdale Tennis Club in Melbourne, Australia, but club n
 - Google Slides URL configuration with a native slideshow preview.
 - Automatic two-minute refresh and a manual **Refresh TV now** control.
 - A one-off event override demonstration.
+- An authenticated JPEG/PNG image library with **Show now** and **Use as honours** controls.
+- Original-file checksum and dimension verification plus last-known-good image caching on each Pi.
 - A progressive web app shell for recovery after a brief network outage.
 - A reproducible Raspberry Pi 4/400 image definition based on Raspberry Pi's `rpi-image-gen` web-kiosk pattern.
 
-The public demonstration is not yet a production administration service. Its settings are stored only in the current browser and it never uploads passwords or Google credentials.
+The local demonstration retains browser-only preview settings. When deployed with a real Google OAuth client and committee allow-list, its control room uses the AWS API for authenticated display changes and image uploads; Google credentials are never stored on a Pi.
 
 ## Run on a laptop
 
@@ -45,7 +47,7 @@ No club password or Google credential is committed to the image or repository. T
 
 ## AWS control plane
 
-The cost-minimal AWS control plane is in [`infra/`](infra/README.md). It defines pay-per-request DynamoDB tables, a small ARM Lambda Function URL with ETag support, Google ID-token-protected committee actions, a retained audit trail, a private S3/CloudFront control room, a guarded seed command and mandatory low-dollar billing alerts. Resource names and ownership tags are parameterised, with a [club-account migration runbook](infra/MIGRATION.md) for later transfer out of the pilot account.
+The cost-minimal AWS control plane is in [`infra/`](infra/README.md). It defines pay-per-request DynamoDB tables, a small ARM Lambda Function URL with ETag support, Google ID-token-protected committee actions, a retained audit trail, a private S3/CloudFront control room and image store, a guarded seed command and mandatory low-dollar billing alerts. Resource names and ownership tags are parameterised, with a [club-account migration runbook](infra/MIGRATION.md) for later transfer out of the pilot account.
 
 Agent-assisted AWS work uses the official [Agent Toolkit for AWS](docs/AWS_AGENT_TOOLKIT.md), with repository guardrails for Sydney-region deployment, CDK, least privilege, cost control and future club ownership.
 

@@ -32,6 +32,7 @@ apt-get install -y --no-install-recommends \
   seatd
 
 install -d -o "$target_user" -g "$target_user" -m 0755 /var/lib/opencourt
+install -d -o "$target_user" -g "$target_user" -m 0755 /var/lib/opencourt/assets
 install -d -o "$target_user" -g "$target_user" -m 0755 /var/cache/opencourt/chromium
 install -d -o "$target_user" -g "$target_user" -m 0755 /var/cache/opencourt/chromium-profile
 install -o "$target_user" -g "$target_user" -m 0644 "$payload_dir/player.html" /var/lib/opencourt/player.html

@@ -76,6 +76,7 @@ Keep the AWS footprint deliberately small:
 - Use one small Lambda API, preferably behind a Lambda Function URL initially. Add API Gateway only if its routing, authorisation or throttling features become necessary.
 - Store device configuration, schedules, overrides and audit records in DynamoDB on-demand.
 - Store the original 4K honours image in S3 and serve it unchanged through CloudFront if the existing honours-board application is not the source endpoint.
+- Let an authorised committee member upload a corrected 4K JPEG/PNG, preview it in the image library, show it temporarily, and deliberately promote it to the honours-board default. Keep earlier immutable assets available for a simple rollback.
 - Use Google Workspace sign-in for committee administrators. The API verifies the Google ID token and an explicit club-domain/address allow-list. Do not store Google passwords.
 - Keep the device configuration response anonymous, read-only and free of secrets; use an unguessable per-device identifier and signed administrative writes.
 - Define the infrastructure with AWS CDK in TypeScript so it is reproducible and can be reviewed alongside the application.
@@ -154,12 +155,13 @@ The current laptop prototype uses `vinext`, Wrangler and a Cloudflare-specific V
 
 #### Phase 3 implementation status — 27 September 2026
 
-- Added and synthesized the isolated AWS CDK package in `infra/` for Sydney (`ap-southeast-2`). It defines pay-per-request DynamoDB tables, a 128 MB ARM Lambda with reserved concurrency of two, a public read-only Function URL plus Google ID-token-protected admin actions, a retained audit trail, a private S3/CloudFront control room, seven-day logs and mandatory actual-cost alerts at USD $1, $5 and $10.
-- Added public configuration projection, ETag/304 handling, malformed-path handling and contract tests. The Lambda role has only `dynamodb:GetItem`; no public write route is present.
+- Added and synthesized the isolated AWS CDK package in `infra/` for Sydney (`ap-southeast-2`). It defines pay-per-request DynamoDB tables, a 128 MB ARM Lambda with reserved concurrency of two, a public read-only device route plus Google ID-token-protected admin actions, a retained audit trail, a private S3/CloudFront control room, seven-day logs and mandatory actual-cost alerts at USD $1, $5 and $10.
+- Added public configuration projection, ETag/304 handling, malformed-path handling and contract tests. The public route cannot write; authenticated administrator routes receive only the narrow DynamoDB and S3 permissions needed for device actions and image upload verification.
 - Added guarded local seed commands that validate image/Google Slides providers and programme metadata. Device changes use strictly newer revisions; authenticated control-room changes write the device update and audit event atomically.
 - Parameterised the club, stage and operational owner; added account-migration tags and deletion protection; and documented a one-display-at-a-time move to a future club-owned AWS account in `infra/MIGRATION.md`.
 - Installed the official Agent Toolkit for AWS `aws-core` Codex plugin and added persistent repository guidance for CDK, current AWS documentation, least privilege, cost control and auditable AWS MCP operations.
 - The existing pilot account already hosts the read-only device control plane. The authenticated control-room increment is synthesized and tested locally but awaits deployment with the real Google web client ID, committee email allow-list and explicit confirmation of the target account/billing contact. Placeholder values deliberately reject all admin sign-ins.
+- Added an authenticated image library. Uploads use five-minute signed S3 URLs bound to a JPEG/PNG content type and SHA-256 checksum. Committee members can show any validated image temporarily or make an exact 3840×2160 image the honours-board default; the Pi verifies and caches it before changing the screen.
 
 ### Phase 4: coexistence at the club
 

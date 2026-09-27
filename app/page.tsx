@@ -1,6 +1,6 @@
 'use client';
 
-/* oxlint-disable react/react-compiler -- browser-only device configuration is hydrated after mount. */
+/* oxlint-disable react/react-compiler, next/no-img-element -- browser-only configuration and original-resolution display assets are intentional. */
 
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import {
@@ -12,6 +12,7 @@ import {
   Clock3,
   Cloud,
   Eye,
+  ImageIcon,
   KeyRound,
   Laptop,
   Maximize2,
@@ -22,6 +23,7 @@ import {
   RefreshCw,
   Settings2,
   ShieldCheck,
+  Upload,
   Wifi,
   type LucideIcon,
 } from 'lucide-react';
@@ -32,7 +34,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { GoogleSignIn, signOutGoogle } from '@/components/google-sign-in';
-import { issueDeviceAction, loadAdminState, type RemoteDevice, type RemoteProgramme } from '@/lib/control-api';
+import { issueDeviceAction, loadAdminState, uploadDisplayImage, type RemoteAsset, type RemoteDevice, type RemoteProgramme } from '@/lib/control-api';
 import { getRuntimeConfig } from '@/lib/runtime-config';
 
 type View = 'display' | 'control' | 'setup';
@@ -117,6 +119,7 @@ export default function Home() {
   const [deviceMode, setDeviceMode] = useState(false);
   const [authToken, setAuthToken] = useState<string | null>(null);
   const [remoteProgrammes, setRemoteProgrammes] = useState<RemoteProgramme[]>([]);
+  const [remoteAssets, setRemoteAssets] = useState<RemoteAsset[]>([]);
   const [remoteDevice, setRemoteDevice] = useState<RemoteDevice | null>(null);
   const [adminMessage, setAdminMessage] = useState('');
   const [adminError, setAdminError] = useState('');
@@ -128,6 +131,7 @@ export default function Home() {
       const state = await loadAdminState(runtimeConfig, token);
       setRemoteProgrammes(state.programmes);
       setRemoteDevice(state.device);
+      setRemoteAssets(state.assets);
     } catch (error) {
       setAdminError(error instanceof Error ? error.message : 'Unable to load the control plane.');
     }
@@ -152,6 +156,33 @@ export default function Home() {
       setAdminMessage(`Updated revision ${device.revision}. The Pi will poll within ${device.pollIntervalSeconds} seconds.`);
     } catch (error) {
       setAdminError(error instanceof Error ? error.message : 'Unable to update the display.');
+    } finally {
+      setAdminBusy(false);
+    }
+  }, [authToken, runtimeConfig]);
+
+  const uploadImage = useCallback(async (file: File) => {
+    if (!authToken) {
+      setAdminError('Sign in with an approved Google Workspace account first.');
+      return;
+    }
+    if (!['image/jpeg', 'image/png'].includes(file.type) || file.size > 20 * 1024 * 1024) {
+      setAdminError('Choose a JPEG or PNG no larger than 20 MB.');
+      return;
+    }
+    setAdminBusy(true);
+    setAdminMessage('Checking and uploading image…');
+    setAdminError('');
+    try {
+      const bitmap = await createImageBitmap(file);
+      const dimensions = { width: bitmap.width, height: bitmap.height };
+      bitmap.close();
+      const asset = await uploadDisplayImage(runtimeConfig, authToken, file, dimensions);
+      setRemoteAssets((current) => [asset, ...current.filter((item) => item.assetId !== asset.assetId)]);
+      setAdminMessage(`Uploaded ${asset.name} at ${asset.width}×${asset.height}. Choose how to display it below.`);
+    } catch (error) {
+      setAdminError(error instanceof Error ? error.message : 'Unable to upload the image.');
+      setAdminMessage('');
     } finally {
       setAdminBusy(false);
     }
@@ -259,15 +290,18 @@ export default function Home() {
           }}
           onRefresh={refreshDisplay}
           onRemoteAction={runRemoteAction}
+          onUploadImage={uploadImage}
           onSignOut={() => {
             signOutGoogle();
             setAuthToken(null);
             setRemoteDevice(null);
             setRemoteProgrammes([]);
+            setRemoteAssets([]);
           }}
           onSaveSource={saveSource}
           onCredential={onCredential}
           remoteDevice={remoteDevice}
+          remoteAssets={remoteAssets}
           remoteProgrammes={remoteProgrammes}
           refreshing={refreshing}
           setSlidesUrl={setSlidesUrl}
@@ -451,10 +485,12 @@ function ControlView({
   onPreview,
   onRefresh,
   onRemoteAction,
+  onUploadImage,
   onSignOut,
   onSaveSource,
   onCredential,
   remoteDevice,
+  remoteAssets,
   remoteProgrammes,
   refreshing,
   setSlidesUrl,
@@ -473,10 +509,12 @@ function ControlView({
   onPreview: (id: string) => void;
   onRefresh: () => void;
   onRemoteAction: (action: Record<string, unknown>) => void;
+  onUploadImage: (file: File) => void;
   onSignOut: () => void;
   onSaveSource: () => void;
   onCredential: (token: string) => void;
   remoteDevice: RemoteDevice | null;
+  remoteAssets: RemoteAsset[];
   remoteProgrammes: RemoteProgramme[];
   refreshing: boolean;
   setSlidesUrl: (value: string) => void;
@@ -588,6 +626,64 @@ function ControlView({
             </CardContent>
           </Card>
         </div>
+
+        <Card className="border-0 bg-white text-court-ink ring-0 lg:col-span-2">
+          <CardHeader className="border-b border-black/5">
+            <CardTitle className="flex items-center gap-2 text-xl"><ImageIcon className="text-club-green" /> Image library</CardTitle>
+            <CardDescription>Upload a JPEG or PNG once, then show it immediately on the TV. An exact 3840×2160 image can also become the permanent honours-board source.</CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-5">
+            <div className="flex flex-col gap-3 rounded-xl border border-dashed border-black/15 bg-stone-50 p-4 sm:flex-row sm:items-center sm:justify-between">
+              <div>
+                <p className="flex items-center gap-2 font-bold"><Upload className="size-4 text-club-green" /> Add a display image</p>
+                <p className="mt-1 text-xs text-court-ink/50">JPEG or PNG, up to 20 MB. Images are verified before they appear in this library.</p>
+              </div>
+              <Input
+                accept="image/jpeg,image/png"
+                className="max-w-sm bg-white"
+                disabled={!authToken || adminBusy}
+                onChange={(event) => {
+                  const file = event.target.files?.[0];
+                  if (file) onUploadImage(file);
+                  event.target.value = '';
+                }}
+                type="file"
+              />
+            </div>
+
+            {remoteAssets.length ? (
+              <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+                {remoteAssets.map((asset) => {
+                  const isFourK = asset.width === 3840 && asset.height === 2160;
+                  const isActive = remoteDevice?.source.url === asset.publicUrl;
+                  return (
+                    <article className={`overflow-hidden rounded-xl border ${isActive ? 'border-club-green ring-2 ring-club-green/15' : 'border-black/10'}`} key={asset.assetId}>
+                      <div className="aspect-video bg-court-ink/5">
+                        <img alt={asset.name} className="h-full w-full object-contain" loading="lazy" src={asset.publicUrl} />
+                      </div>
+                      <div className="space-y-3 p-3">
+                        <div>
+                          <div className="flex items-start justify-between gap-2">
+                            <p className="truncate text-sm font-bold" title={asset.name}>{asset.name}</p>
+                            {isActive && <Badge className="shrink-0 bg-club-green text-white">On TV</Badge>}
+                          </div>
+                          <p className="mt-1 text-xs text-court-ink/45">{asset.width}×{asset.height} · {(asset.byteSize / 1024 / 1024).toFixed(1)} MB</p>
+                        </div>
+                        <div className="grid grid-cols-2 gap-2">
+                          <Button disabled={!authToken || adminBusy} onClick={() => onRemoteAction({ action: 'show_image', assetId: asset.assetId })} size="sm">Show now</Button>
+                          <Button disabled={!authToken || adminBusy || !isFourK} onClick={() => onRemoteAction({ action: 'set_honours_image', assetId: asset.assetId })} size="sm" variant="outline">Use as honours</Button>
+                        </div>
+                        {!isFourK && <p className="text-[11px] leading-4 text-court-ink/40">Temporary display only. The honours source must be exactly 3840×2160.</p>}
+                      </div>
+                    </article>
+                  );
+                })}
+              </div>
+            ) : (
+              <p className="rounded-xl bg-stone-50 p-5 text-sm text-court-ink/50">{authToken ? 'No uploaded images yet.' : 'Sign in to view and upload club display images.'}</p>
+            )}
+          </CardContent>
+        </Card>
 
         <Card className="border-0 bg-white text-court-ink ring-0 lg:col-span-2">
           <CardHeader className="border-b border-black/5">

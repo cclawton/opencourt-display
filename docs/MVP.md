@@ -11,6 +11,8 @@
 - Full-screen Raspberry Pi 400 display.
 - Guided first boot for Wi-Fi, one administrator and Google Slides configuration.
 - Club-controlled remote administration design.
+- Authenticated upload and selection of arbitrary JPEG/PNG display images.
+- Safe replacement of the 3840×2160 honours-board default.
 - Reproducible open-source build and handover documentation.
 
 ## Acceptance criteria
@@ -23,7 +25,7 @@
 - A one-off event can take priority over the recurring programme.
 - The player starts after boot without manual browser interaction.
 - A fresh image collects configuration without embedding club secrets.
-- Failure to retrieve new content does not discard the last-known-good version once caching is implemented.
+- Failure to retrieve or validate a remote image does not discard the last-known-good version.
 
 ## Explicitly deferred
 
@@ -31,4 +33,4 @@
 - Casual member booking integration.
 - Multiple administrator roles.
 - Centrally hosted multi-club management.
-- Private Google service-account synchronization and PDF/image caching.
+- Private Google service-account synchronization and cached Google Slides/PDF rendering.

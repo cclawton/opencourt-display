@@ -4,6 +4,7 @@
 from __future__ import annotations
 
 import json
+import hashlib
 import os
 from pathlib import Path
 import signal
@@ -20,6 +21,8 @@ CONFIG_PATH = Path(os.environ.get("OPENCOURT_CONFIG", CONTENT_DIR / "device-conf
 REMOTE_PATH = Path(os.environ.get("OPENCOURT_REMOTE", CONTENT_DIR / "remote.json"))
 CHROMIUM = os.environ.get("OPENCOURT_CHROMIUM", "/usr/bin/chromium")
 MAX_CONFIG_BYTES = 128 * 1024
+MAX_IMAGE_BYTES = 20 * 1024 * 1024
+ASSET_DIR = CONTENT_DIR / "assets"
 STOP = Event()
 
 
@@ -150,13 +153,102 @@ def google_slides_url(value: str) -> str:
     return urlunparse(("https", "docs.google.com", path, "", urlencode(query), ""))
 
 
-def image_player_url(source: dict[str, Any], revision: str) -> str:
-    relative_name = str(source.get("url", ""))
-    if not relative_name or Path(relative_name).name != relative_name:
-        raise ConfigError("image URL must be a local filename")
+def image_dimensions(payload: bytes) -> tuple[int, int]:
+    if payload.startswith(b"\x89PNG\r\n\x1a\n") and len(payload) >= 24:
+        return int.from_bytes(payload[16:20], "big"), int.from_bytes(payload[20:24], "big")
 
-    image_path = (CONTENT_DIR / relative_name).resolve()
-    if image_path.parent != CONTENT_DIR.resolve() or not image_path.is_file():
+    if payload.startswith(b"\xff\xd8"):
+        offset = 2
+        start_of_frame = {0xC0, 0xC1, 0xC2, 0xC3, 0xC5, 0xC6, 0xC7, 0xC9, 0xCA, 0xCB, 0xCD, 0xCE, 0xCF}
+        while offset + 9 < len(payload):
+            if payload[offset] != 0xFF:
+                offset += 1
+                continue
+            while offset < len(payload) and payload[offset] == 0xFF:
+                offset += 1
+            if offset >= len(payload):
+                break
+            marker = payload[offset]
+            offset += 1
+            if marker in {0xD8, 0xD9}:
+                continue
+            if offset + 2 > len(payload):
+                break
+            segment_length = int.from_bytes(payload[offset:offset + 2], "big")
+            if segment_length < 2 or offset + segment_length > len(payload):
+                break
+            if marker in start_of_frame and segment_length >= 7:
+                return (
+                    int.from_bytes(payload[offset + 5:offset + 7], "big"),
+                    int.from_bytes(payload[offset + 3:offset + 5], "big"),
+                )
+            offset += segment_length
+
+    raise ConfigError("downloaded image is not a supported JPEG or PNG")
+
+
+def cache_remote_image(
+    source: dict[str, Any],
+    revision: str,
+    opener: Any = None,
+) -> str:
+    url = str(source.get("url", "")).strip()
+    parsed = urlparse(url)
+    if parsed.scheme != "https" or not parsed.netloc or parsed.username or parsed.password:
+        raise ConfigError("remote image URL must use HTTPS")
+
+    suffix = Path(parsed.path).suffix.lower()
+    if suffix not in {".jpg", ".jpeg", ".png"}:
+        raise ConfigError("remote image must be a JPEG or PNG")
+    cache_name = f"{hashlib.sha256(f'{url}|{revision}'.encode()).hexdigest()[:24]}{suffix}"
+    relative_name = f"assets/{cache_name}"
+    target = ASSET_DIR / cache_name
+    if target.is_file():
+        return relative_name
+
+    request = Request(url, headers={"Accept": "image/jpeg,image/png", "User-Agent": "OpenCourt-Display/0.1"})
+    open_request = opener or urlopen
+    with open_request(request, timeout=20) as response:
+        content_length = response.headers.get("Content-Length")
+        if content_length and int(content_length) > MAX_IMAGE_BYTES:
+            raise ConfigError("remote image is too large")
+        content_type = response.headers.get("Content-Type", "").split(";", 1)[0].strip().lower()
+        if content_type not in {"image/jpeg", "image/png"}:
+            raise ConfigError("remote image content type is invalid")
+        payload = response.read(MAX_IMAGE_BYTES + 1)
+    if len(payload) > MAX_IMAGE_BYTES:
+        raise ConfigError("remote image is too large")
+
+    width, height = image_dimensions(payload)
+    expected_width = source.get("expectedWidth")
+    expected_height = source.get("expectedHeight")
+    if expected_width and width != int(expected_width):
+        raise ConfigError(f"remote image width {width} does not match {expected_width}")
+    if expected_height and height != int(expected_height):
+        raise ConfigError(f"remote image height {height} does not match {expected_height}")
+    expected_sha256 = str(source.get("sha256", "")).lower()
+    if expected_sha256 and hashlib.sha256(payload).hexdigest() != expected_sha256:
+        raise ConfigError("remote image checksum does not match")
+
+    ASSET_DIR.mkdir(mode=0o755, parents=True, exist_ok=True)
+    temporary = target.with_suffix(f"{target.suffix}.tmp")
+    temporary.write_bytes(payload)
+    temporary.chmod(0o644)
+    temporary.replace(target)
+    return relative_name
+
+
+def image_player_url(source: dict[str, Any], revision: str) -> str:
+    value = str(source.get("url", "")).strip()
+    relative_name = cache_remote_image(source, revision) if value.startswith("https://") else value
+    relative_path = Path(relative_name)
+    if not relative_name or relative_path.is_absolute() or ".." in relative_path.parts:
+        raise ConfigError("image URL must be a safe local filename or HTTPS URL")
+    if len(relative_path.parts) > 2 or (len(relative_path.parts) == 2 and relative_path.parts[0] != "assets"):
+        raise ConfigError("image cache path is invalid")
+
+    image_path = (CONTENT_DIR / relative_path).resolve()
+    if CONTENT_DIR.resolve() not in image_path.parents or not image_path.is_file():
         raise ConfigError("configured image does not exist")
 
     player_path = CONTENT_DIR / "player.html"
