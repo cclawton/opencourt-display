@@ -1,0 +1,13 @@
+window.OPENCOURT_CONFIG = {
+  schemaVersion: 1,
+  deviceId: 'honours-board-tv',
+  revision: 1,
+  pollIntervalSeconds: 60,
+  source: {
+    type: 'image',
+    url: 'honours-board.jpg',
+    expectedWidth: 3840,
+    expectedHeight: 2160,
+    alt: 'Club honours board',
+  },
+};
