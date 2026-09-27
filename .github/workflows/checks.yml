@@ -17,6 +17,7 @@ jobs:
           node-version: 22
           cache: npm
       - run: npm ci
+      - run: npm test
       - run: npm run build
       - run: npm run lint
 
@@ -26,3 +27,5 @@ jobs:
       - uses: actions/checkout@v4
       - name: Check first-boot scripts
         run: sh -n image/opencourt-firstboot image/opencourt-launch image/build-image.sh
+      - name: Check live-player Python
+        run: python3 -m py_compile deploy/pi-live/opencourt-player

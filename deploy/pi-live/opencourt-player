@@ -1,0 +1,170 @@
+#!/usr/bin/python3
+"""Run one kiosk browser and switch its top-level source when config changes."""
+
+from __future__ import annotations
+
+import json
+import os
+from pathlib import Path
+import signal
+import subprocess
+import sys
+from threading import Event
+from typing import Any
+from urllib.parse import parse_qsl, urlencode, urlparse, urlunparse
+
+CONTENT_DIR = Path(os.environ.get("OPENCOURT_CONTENT_DIR", "/var/lib/opencourt"))
+CONFIG_PATH = Path(os.environ.get("OPENCOURT_CONFIG", CONTENT_DIR / "device-config.json"))
+CHROMIUM = os.environ.get("OPENCOURT_CHROMIUM", "/usr/bin/chromium")
+STOP = Event()
+
+
+class ConfigError(ValueError):
+    """The candidate configuration is unsafe or unsupported."""
+
+
+def load_config(path: Path = CONFIG_PATH) -> dict[str, Any]:
+    config = json.loads(path.read_text(encoding="utf-8"))
+    if config.get("schemaVersion") != 1:
+        raise ConfigError("schemaVersion must be 1")
+    if not str(config.get("revision", "")):
+        raise ConfigError("revision is required")
+    if not isinstance(config.get("source"), dict):
+        raise ConfigError("source is required")
+    return config
+
+
+def google_slides_url(value: str) -> str:
+    parsed = urlparse(value.strip())
+    if parsed.scheme != "https" or parsed.netloc != "docs.google.com":
+        raise ConfigError("Google Slides URL must use https://docs.google.com")
+
+    parts = [part for part in parsed.path.split("/") if part]
+    if len(parts) < 4 or parts[:2] != ["presentation", "d"]:
+        raise ConfigError("Google Slides presentation path is invalid")
+
+    if parts[2] == "e":
+        if len(parts) < 5:
+            raise ConfigError("published presentation ID is missing")
+        path = f"/presentation/d/e/{parts[3]}/embed"
+    else:
+        path = f"/presentation/d/{parts[2]}/present"
+
+    query = dict(parse_qsl(parsed.query, keep_blank_values=True))
+    query.update({"start": "true", "loop": "true", "delayms": "10000"})
+    return urlunparse(("https", "docs.google.com", path, "", urlencode(query), ""))
+
+
+def image_player_url(source: dict[str, Any], revision: str) -> str:
+    relative_name = str(source.get("url", ""))
+    if not relative_name or Path(relative_name).name != relative_name:
+        raise ConfigError("image URL must be a local filename")
+
+    image_path = (CONTENT_DIR / relative_name).resolve()
+    if image_path.parent != CONTENT_DIR.resolve() or not image_path.is_file():
+        raise ConfigError("configured image does not exist")
+
+    player_path = CONTENT_DIR / "player.html"
+    if not player_path.is_file():
+        raise ConfigError("local image player does not exist")
+
+    query = urlencode(
+        {
+            "image": relative_name,
+            "revision": revision,
+            "expectedWidth": source.get("expectedWidth", ""),
+            "expectedHeight": source.get("expectedHeight", ""),
+            "alt": source.get("alt", "Club display"),
+        }
+    )
+    return f"{player_path.as_uri()}?{query}"
+
+
+def target_url(config: dict[str, Any]) -> str:
+    source = config["source"]
+    revision = str(config["revision"])
+    if source.get("type") == "image":
+        return image_player_url(source, revision)
+    if source.get("type") == "google_slides":
+        return google_slides_url(str(source.get("url", "")))
+    raise ConfigError(f"unsupported source type: {source.get('type', 'missing')}")
+
+
+def browser_command(url: str) -> list[str]:
+    return [
+        CHROMIUM,
+        "--kiosk",
+        "--noerrdialogs",
+        "--disable-infobars",
+        "--no-first-run",
+        "--disable-session-crashed-bubble",
+        "--disable-translate",
+        "--disable-pinch",
+        "--overscroll-history-navigation=0",
+        "--enable-features=UseOzonePlatform",
+        "--ozone-platform=wayland",
+        "--disk-cache-dir=/var/cache/opencourt/chromium",
+        "--user-data-dir=/var/cache/opencourt/chromium-profile",
+        url,
+    ]
+
+
+def stop_browser(browser: subprocess.Popen[Any] | None) -> None:
+    if browser is None or browser.poll() is not None:
+        return
+    browser.terminate()
+    try:
+        browser.wait(timeout=10)
+    except subprocess.TimeoutExpired:
+        browser.kill()
+        browser.wait(timeout=5)
+
+
+def request_stop(_signum: int, _frame: Any) -> None:
+    STOP.set()
+
+
+def main() -> int:
+    signal.signal(signal.SIGTERM, request_stop)
+    signal.signal(signal.SIGINT, request_stop)
+
+    browser: subprocess.Popen[Any] | None = None
+    active_revision: str | None = None
+    active_url: str | None = None
+    poll_seconds = 60
+
+    try:
+        while not STOP.is_set():
+            try:
+                config = load_config()
+                candidate_revision = str(config["revision"])
+                candidate_url = target_url(config)
+                poll_seconds = max(15, int(config.get("pollIntervalSeconds", 60)))
+
+                if (
+                    browser is None
+                    or browser.poll() is not None
+                    or candidate_revision != active_revision
+                    or candidate_url != active_url
+                ):
+                    stop_browser(browser)
+                    print(
+                        f"OpenCourt: launching revision {candidate_revision} "
+                        f"({config['source']['type']})",
+                        flush=True,
+                    )
+                    browser = subprocess.Popen(browser_command(candidate_url))
+                    active_revision = candidate_revision
+                    active_url = candidate_url
+            except (ConfigError, json.JSONDecodeError, OSError, TypeError, ValueError) as error:
+                print(f"OpenCourt: keeping last-known-good content: {error}", file=sys.stderr, flush=True)
+
+            STOP.wait(poll_seconds)
+    finally:
+        stop_browser(browser)
+
+    return 0
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())

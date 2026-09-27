@@ -3,7 +3,7 @@
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>Heatherdale honours board</title>
+    <title>OpenCourt image player</title>
     <style>
       html,
       body {
@@ -15,12 +15,10 @@
         cursor: none;
       }
 
-      img,
-      iframe {
+      img {
         display: block;
         width: 100vw;
         height: 100vh;
-        border: 0;
         object-fit: contain;
       }
 
@@ -40,110 +38,35 @@
     <div id="status">Starting club display…</div>
     <script>
       (() => {
-        let activeRevision = null;
-        let hasContent = false;
-        let pollTimer = null;
+        const params = new URLSearchParams(window.location.search);
+        const source = params.get('image');
+        const expectedWidth = Number(params.get('expectedWidth'));
+        const expectedHeight = Number(params.get('expectedHeight'));
+        const revision = params.get('revision') || '';
+        const status = document.querySelector('#status');
 
-        function showStartupError(message) {
-          console.error(message);
-          if (!hasContent) document.querySelector('#status').textContent = message;
+        if (!source || source.includes('/') || source.includes('\\')) {
+          status.textContent = 'The configured display image is invalid.';
+          return;
         }
 
-        function revisionUrl(url, revision) {
-          const separator = url.includes('?') ? '&' : '?';
-          return `${url}${separator}opencourtRevision=${encodeURIComponent(revision)}`;
-        }
-
-        function slidesEmbedUrl(value, revision) {
-          const trimmed = String(value || '').trim();
-          if (!trimmed.includes('docs.google.com/presentation')) return '';
-
-          let url = '';
-          if (trimmed.includes('/embed')) {
-            url = trimmed;
-          } else if (trimmed.includes('/d/e/')) {
-            url = trimmed.replace(/\/(pub|edit|present).*$/, '/embed');
-          } else {
-            const match = trimmed.match(/\/presentation\/d\/([^/]+)/);
-            if (match) url = `https://docs.google.com/presentation/d/${match[1]}/embed`;
-          }
-
-          if (!url) return '';
-          const separator = url.includes('?') ? '&' : '?';
-          return `${url}${separator}start=true&loop=true&delayms=10000&rm=minimal&opencourtRevision=${encodeURIComponent(revision)}`;
-        }
-
-        function showImage(source, revision) {
-          const image = new Image();
-          image.alt = source.alt || 'Club display';
-          image.onload = () => {
-            if (
-              (source.expectedWidth && image.naturalWidth !== source.expectedWidth) ||
-              (source.expectedHeight && image.naturalHeight !== source.expectedHeight)
-            ) {
-              showStartupError(
-                `Image dimensions ${image.naturalWidth}×${image.naturalHeight} do not match the configured dimensions.`,
-              );
-              return;
-            }
-            document.body.replaceChildren(image);
-            hasContent = true;
-            activeRevision = revision;
-          };
-          image.onerror = () => showStartupError('The configured display image could not be loaded.');
-          image.src = revisionUrl(source.url, revision);
-        }
-
-        function showSlides(source, revision) {
-          const url = slidesEmbedUrl(source.url, revision);
-          if (!url) {
-            showStartupError('The configured Google Slides URL is invalid.');
+        const image = new Image();
+        image.alt = params.get('alt') || 'Club display';
+        image.onload = () => {
+          if (
+            (expectedWidth && image.naturalWidth !== expectedWidth) ||
+            (expectedHeight && image.naturalHeight !== expectedHeight)
+          ) {
+            status.textContent =
+              `Image dimensions ${image.naturalWidth}×${image.naturalHeight} do not match the configured dimensions.`;
             return;
           }
-          const frame = document.createElement('iframe');
-          frame.allowFullscreen = true;
-          frame.referrerPolicy = 'strict-origin-when-cross-origin';
-          frame.title = source.title || 'Court allocation slideshow';
-          frame.src = url;
-          document.body.replaceChildren(frame);
-          hasContent = true;
-          activeRevision = revision;
-        }
-
-        function applyConfig(config) {
-          if (!config || config.schemaVersion !== 1 || !config.source) {
-            showStartupError('The device configuration is invalid.');
-            return;
-          }
-
-          const revision = String(config.revision ?? '');
-          if (!revision || revision === activeRevision) return;
-
-          if (config.source.type === 'image') showImage(config.source, revision);
-          else if (config.source.type === 'google_slides') showSlides(config.source, revision);
-          else showStartupError(`Unsupported content source: ${config.source.type || 'missing'}.`);
-
-          const seconds = Math.max(15, Number(config.pollIntervalSeconds) || 60);
-          window.clearTimeout(pollTimer);
-          pollTimer = window.setTimeout(loadConfig, seconds * 1000);
-        }
-
-        function loadConfig() {
-          const script = document.createElement('script');
-          script.src = `device-config.js?attempt=${Date.now()}`;
-          script.onload = () => {
-            script.remove();
-            applyConfig(window.OPENCOURT_CONFIG);
-          };
-          script.onerror = () => {
-            script.remove();
-            showStartupError('The device configuration could not be loaded.');
-            pollTimer = window.setTimeout(loadConfig, 60_000);
-          };
-          document.head.appendChild(script);
-        }
-
-        loadConfig();
+          document.body.replaceChildren(image);
+        };
+        image.onerror = () => {
+          status.textContent = 'The configured display image could not be loaded.';
+        };
+        image.src = `${source}?opencourtRevision=${encodeURIComponent(revision)}`;
       })();
     </script>
   </body>

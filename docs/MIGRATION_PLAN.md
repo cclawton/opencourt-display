@@ -134,6 +134,14 @@ The current laptop prototype uses `vinext`, Wrangler and a Cloudflare-specific V
 - Add atomic last-known-good updates and a visible offline/stale indicator available to administrators but hidden in normal kiosk mode.
 - Verify clean boot, browser crash recovery, network loss, content refresh and power loss.
 
+#### Phase 2 execution log — 27 September 2026
+
+- Added a revisioned device configuration with explicit `image` and `google_slides` source types.
+- The first browser-only poll stopped after an unchanged revision; a regression test reproduced that failure and confirmed the corrected recurring poll.
+- Google returned a 403 when the published Saturday Morning presentation was placed inside an iframe, even though the same URL was public and returned HTTP 200. Off-screen Pi renders confirmed the presentation worked when Google Slides was the browser's top-level page and failed only when framed.
+- Replaced iframe switching with a small standard-library Python supervisor. It validates JSON configuration, keeps the current browser when a candidate configuration is invalid, and restarts Chromium only for a changed revision, changed source or browser failure. It opens images through the local dimension-checking player and Google Slides directly at top level.
+- Installed the supervisor on `opencourt-honours`. Revision 2 switched from the honours image to the legacy Saturday Morning presentation, which displayed “Winter Grand Final 2026” without error. Revision 3 then returned the TV to the local honours board without a service restart or manual browser action.
+
 ### Phase 3: committee control plane
 
 - Deploy the static control room to S3/CloudFront and the small Lambda/DynamoDB configuration API using AWS CDK.

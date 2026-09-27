@@ -14,7 +14,7 @@ if ! id "$target_user" >/dev/null 2>&1; then
   exit 1
 fi
 
-for required_file in player.html device-config.js opencourt-launch-local opencourt-kiosk.service honours-board.jpg; do
+for required_file in player.html device-config.json opencourt-player opencourt-launch-local opencourt-kiosk.service honours-board.jpg; do
   if [ ! -f "$payload_dir/$required_file" ]; then
     printf 'Missing installer payload: %s\n' "$required_file" >&2
     exit 1
@@ -28,15 +28,18 @@ apt-get install -y --no-install-recommends \
   cage \
   chromium \
   fonts-liberation \
+  python3-minimal \
   seatd
 
 install -d -o "$target_user" -g "$target_user" -m 0755 /var/lib/opencourt
 install -d -o "$target_user" -g "$target_user" -m 0755 /var/cache/opencourt/chromium
+install -d -o "$target_user" -g "$target_user" -m 0755 /var/cache/opencourt/chromium-profile
 install -o "$target_user" -g "$target_user" -m 0644 "$payload_dir/player.html" /var/lib/opencourt/player.html
 install -o "$target_user" -g "$target_user" -m 0644 "$payload_dir/honours-board.jpg" /var/lib/opencourt/honours-board.jpg
-if [ ! -f /var/lib/opencourt/device-config.js ]; then
-  install -o "$target_user" -g "$target_user" -m 0644 "$payload_dir/device-config.js" /var/lib/opencourt/device-config.js
+if [ ! -f /var/lib/opencourt/device-config.json ]; then
+  install -o "$target_user" -g "$target_user" -m 0644 "$payload_dir/device-config.json" /var/lib/opencourt/device-config.json
 fi
+install -m 0755 "$payload_dir/opencourt-player" /usr/local/bin/opencourt-player
 install -m 0755 "$payload_dir/opencourt-launch-local" /usr/local/bin/opencourt-launch-local
 install -m 0644 "$payload_dir/opencourt-kiosk.service" /etc/systemd/system/opencourt-kiosk.service
 
