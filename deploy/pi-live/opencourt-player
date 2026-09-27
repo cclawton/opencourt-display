@@ -27,12 +27,18 @@ class ConfigError(ValueError):
     """The candidate configuration is unsafe or unsupported."""
 
 
+def config_revision(config: dict[str, Any], label: str = "configuration") -> int:
+    revision = config.get("revision")
+    if isinstance(revision, bool) or not isinstance(revision, int) or revision < 1:
+        raise ConfigError(f"{label} revision must be a positive integer")
+    return revision
+
+
 def load_config(path: Path = CONFIG_PATH) -> dict[str, Any]:
     config = json.loads(path.read_text(encoding="utf-8"))
     if config.get("schemaVersion") != 1:
         raise ConfigError("schemaVersion must be 1")
-    if not str(config.get("revision", "")):
-        raise ConfigError("revision is required")
+    config_revision(config)
     if not isinstance(config.get("source"), dict):
         raise ConfigError("source is required")
     return config
@@ -96,8 +102,7 @@ def validate_remote_config(config: dict[str, Any], device_id: str) -> None:
         raise ConfigError("remote config schemaVersion must be 1")
     if str(config.get("deviceId", "")) != device_id:
         raise ConfigError("remote config deviceId does not match this display")
-    if not str(config.get("revision", "")):
-        raise ConfigError("remote config revision is required")
+    config_revision(config, "remote configuration")
     if not isinstance(config.get("source"), dict):
         raise ConfigError("remote config source is required")
 
@@ -107,6 +112,21 @@ def write_config_atomically(config: dict[str, Any], path: Path = CONFIG_PATH) ->
     temporary_path.write_text(f"{json.dumps(config, indent=2)}\n", encoding="utf-8")
     temporary_path.chmod(0o644)
     temporary_path.replace(path)
+
+
+def require_newer_remote_revision(
+    remote_config: dict[str, Any],
+    local_config: dict[str, Any] | None,
+) -> None:
+    if local_config is None:
+        return
+
+    remote_revision = config_revision(remote_config, "remote configuration")
+    local_revision = config_revision(local_config, "local configuration")
+    if remote_revision <= local_revision:
+        raise ConfigError(
+            f"remote revision {remote_revision} is not newer than local revision {local_revision}"
+        )
 
 
 def google_slides_url(value: str) -> str:
@@ -241,6 +261,7 @@ def main() -> int:
                 if remote_settings:
                     remote_config, remote_etag = fetch_remote_config(remote_settings, remote_etag)
                     if remote_config is not None and remote_config != local_config:
+                        require_newer_remote_revision(remote_config, local_config)
                         write_config_atomically(remote_config)
                         print(
                             f"OpenCourt: accepted remote revision {remote_config['revision']}",

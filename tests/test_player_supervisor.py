@@ -81,6 +81,13 @@ class PlayerSupervisorTests(unittest.TestCase):
             with self.assertRaises(PLAYER.ConfigError):
                 PLAYER.load_config(config_path)
 
+            config_path.write_text(
+                json.dumps({"schemaVersion": 1, "revision": "1", "source": {"type": "image"}}),
+                encoding="utf-8",
+            )
+            with self.assertRaises(PLAYER.ConfigError):
+                PLAYER.load_config(config_path)
+
     def test_remote_settings_are_optional_and_require_https(self):
         with tempfile.TemporaryDirectory() as directory:
             settings_path = Path(directory) / "remote.json"
@@ -178,6 +185,18 @@ class PlayerSupervisorTests(unittest.TestCase):
 
             self.assertEqual(json.loads(config_path.read_text(encoding="utf-8")), candidate)
             self.assertFalse(config_path.with_suffix(".json.tmp").exists())
+
+    def test_remote_revision_must_move_forward(self):
+        local = {"revision": 3}
+
+        PLAYER.require_newer_remote_revision({"revision": 4}, local)
+
+        with self.assertRaises(PLAYER.ConfigError):
+            PLAYER.require_newer_remote_revision({"revision": 3}, local)
+        with self.assertRaises(PLAYER.ConfigError):
+            PLAYER.require_newer_remote_revision({"revision": 2}, local)
+
+        PLAYER.require_newer_remote_revision({"revision": 1}, None)
 
 
 if __name__ == "__main__":
