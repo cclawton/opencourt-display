@@ -106,7 +106,8 @@ function formatRefreshTime(date: Date) {
 
 export default function Home() {
   const runtimeConfig = useMemo(getRuntimeConfig, []);
-  const [view, setView] = useState<View>('display');
+  const deployedControlRoom = Boolean(runtimeConfig.apiBaseUrl);
+  const [view, setView] = useState<View>(() => deployedControlRoom ? 'control' : 'display');
   const [activeId, setActiveId] = useState('sat-am');
   const [displayMode, setDisplayMode] = useState<DisplayMode>('cached');
   const [slidesUrl, setSlidesUrl] = useState('');
@@ -254,6 +255,7 @@ export default function Home() {
       {!deviceMode && (
         <AppHeader
           activeView={view}
+          deployedControlRoom={deployedControlRoom}
           onFullscreen={enterFullscreen}
           onNavigate={setView}
           onRefresh={refreshDisplay}
@@ -280,6 +282,7 @@ export default function Home() {
           adminError={adminError}
           adminMessage={adminMessage}
           authToken={authToken}
+          deployedControlRoom={deployedControlRoom}
           displayMode={displayMode}
           lastRefresh={lastRefresh}
           onAddEvent={() => setSpecialEvent((current) => !current)}
@@ -326,12 +329,14 @@ export default function Home() {
 
 function AppHeader({
   activeView,
+  deployedControlRoom,
   onFullscreen,
   onNavigate,
   onRefresh,
   refreshing,
 }: {
   activeView: View;
+  deployedControlRoom: boolean;
   onFullscreen: () => void;
   onNavigate: (view: View) => void;
   onRefresh: () => void;
@@ -339,15 +344,15 @@ function AppHeader({
 }) {
   return (
     <header className="sticky top-0 z-30 flex min-h-16 items-center justify-between border-b border-white/10 bg-court-ink/95 px-4 py-3 backdrop-blur sm:px-7">
-      <button className="flex items-center gap-3 text-left" onClick={() => onNavigate('display')}>
+      <button className="flex items-center gap-3 text-left" onClick={() => onNavigate(deployedControlRoom ? 'control' : 'display')}>
         <div className="grid size-9 place-items-center rounded-full bg-tennis text-sm font-black text-court-ink">OC</div>
         <div>
           <p className="font-display text-sm font-bold leading-tight tracking-wide">OpenCourt Display</p>
-          <p className="text-[11px] text-white/55">Heatherdale demonstration</p>
+          <p className="text-[11px] text-white/55">{deployedControlRoom ? 'Heatherdale Tennis Club' : 'Heatherdale demonstration'}</p>
         </div>
       </button>
 
-      <nav aria-label="Demo views" className="hidden items-center rounded-xl bg-white/[0.07] p-1 md:flex">
+      {!deployedControlRoom && <nav aria-label="Demo views" className="hidden items-center rounded-xl bg-white/[0.07] p-1 md:flex">
         {([
           ['display', 'TV display', Monitor],
           ['control', 'Control room', Settings2],
@@ -361,9 +366,9 @@ function AppHeader({
             <Icon className="size-3.5" /> {label}
           </button>
         ))}
-      </nav>
+      </nav>}
 
-      <div className="flex items-center gap-2">
+      {!deployedControlRoom && <div className="flex items-center gap-2">
         <Button aria-label="Refresh display" className="border-white/10 bg-white/10 text-white hover:bg-white/20" onClick={onRefresh} size="icon" variant="outline">
           <RefreshCw className={refreshing ? 'animate-spin' : ''} />
         </Button>
@@ -373,7 +378,7 @@ function AppHeader({
         <Button aria-label="Enter fullscreen" className="border-white/10 bg-white/10 text-white hover:bg-white/20" onClick={onFullscreen} size="icon" variant="outline">
           <Maximize2 />
         </Button>
-      </div>
+      </div>}
     </header>
   );
 }
@@ -478,6 +483,7 @@ function ControlView({
   adminError,
   adminMessage,
   authToken,
+  deployedControlRoom,
   displayMode,
   lastRefresh,
   onAddEvent,
@@ -502,6 +508,7 @@ function ControlView({
   adminError: string;
   adminMessage: string;
   authToken: string | null;
+  deployedControlRoom: boolean;
   displayMode: DisplayMode;
   lastRefresh: Date | null;
   onAddEvent: () => void;
@@ -527,20 +534,20 @@ function ControlView({
     <section className="mx-auto max-w-7xl px-4 py-8 sm:px-7 lg:py-12">
       <div className="mb-8 flex flex-col justify-between gap-4 sm:flex-row sm:items-end">
         <div>
-          <Badge className="mb-3 bg-tennis text-court-ink">Committee demo</Badge>
-          <h1 className="font-display text-3xl font-black tracking-tight sm:text-5xl">Control room</h1>
-          <p className="mt-2 max-w-2xl text-sm leading-6 text-white/55 sm:text-base">Manage what the clubhouse TV shows without touching the Raspberry Pi. Changes are revisioned, audited and applied on its next poll.</p>
+          <Badge className="mb-3 bg-tennis text-court-ink">{deployedControlRoom ? 'Committee control' : 'Committee demo'}</Badge>
+          <h1 className="font-display text-3xl font-black tracking-tight sm:text-5xl">{deployedControlRoom ? 'Clubhouse display' : 'Control room'}</h1>
+          <p className="mt-2 max-w-2xl text-sm leading-6 text-white/55 sm:text-base">{deployedControlRoom ? 'Choose what appears on the TV. Changes normally arrive within one minute.' : 'Manage what the clubhouse TV shows without touching the Raspberry Pi. Changes are revisioned, audited and applied on its next poll.'}</p>
         </div>
-        <Button className="bg-tennis text-court-ink hover:bg-tennis/85" onClick={onRefresh} size="lg">
+        {!deployedControlRoom && <Button className="bg-tennis text-court-ink hover:bg-tennis/85" onClick={onRefresh} size="lg">
           <RefreshCw className={refreshing ? 'animate-spin' : ''} /> Refresh TV now
-        </Button>
+        </Button>}
       </div>
 
       <Card className="mb-5 border-0 bg-white text-court-ink ring-0">
-        <CardHeader className="border-b border-black/5">
+        {(!deployedControlRoom || !authToken) && <CardHeader className="border-b border-black/5">
           <CardTitle className="flex items-center gap-2"><ShieldCheck className="text-club-green" /> Committee access</CardTitle>
-          <CardDescription>Only approved Google Workspace accounts can change a display. The ID token is verified by the AWS control API and held in memory by this browser.</CardDescription>
-        </CardHeader>
+          <CardDescription>{deployedControlRoom ? 'Sign in with the club Google account to continue.' : 'Only approved Google Workspace accounts can change a display. The ID token is verified by the AWS control API and held in memory by this browser.'}</CardDescription>
+        </CardHeader>}
         <CardContent className="flex flex-wrap items-center justify-between gap-4">
           {authToken ? (
             <div className="flex flex-wrap items-center gap-3">
@@ -557,26 +564,26 @@ function ControlView({
         </CardContent>
       </Card>
 
-      <div className="grid gap-5 lg:grid-cols-[1.25fr_.75fr]">
+      {(!deployedControlRoom || authToken) && <div className="grid gap-5 lg:grid-cols-[1.25fr_.75fr]">
         <Card className="border-0 bg-white text-court-ink ring-0">
           <CardHeader className="border-b border-black/5">
-            <CardTitle className="flex items-center gap-2 text-xl"><CalendarDays className="text-club-green" /> Weekly display schedule</CardTitle>
-            <CardDescription>Eight recurring court-allocation sessions. Previewing a session does not change its saved schedule.</CardDescription>
+            <CardTitle className="flex items-center gap-2 text-xl"><CalendarDays className="text-club-green" /> {deployedControlRoom ? 'Court allocations' : 'Weekly display schedule'}</CardTitle>
+            <CardDescription>{deployedControlRoom ? 'Choose the allocation to show on the TV.' : 'Eight recurring court-allocation sessions. Previewing a session does not change its saved schedule.'}</CardDescription>
           </CardHeader>
           <CardContent className="grid gap-2 sm:grid-cols-2">
             {programmes.map((programme) => {
               const remoteProgramme = remoteProgrammes.find((item) => item.programmeId === programme.id);
               return (
                 <div className={`group flex items-center justify-between gap-2 rounded-xl border p-3 transition hover:border-club-green/40 hover:bg-green-50 ${programme.id === activeId ? 'border-club-green/40 bg-green-50' : 'border-black/8'}`} key={programme.id}>
-                  <button className="min-w-0 flex-1 text-left" onClick={() => onPreview(programme.id)}>
+                  <button className="min-w-0 flex-1 text-left" disabled={deployedControlRoom} onClick={() => onPreview(programme.id)}>
                     <div className="flex items-center gap-2">
                       <span className="font-bold">{programme.name}</span>
-                      {programme.id === activeId && <Badge className="bg-club-green text-white">Preview</Badge>}
+                      {!deployedControlRoom && programme.id === activeId && <Badge className="bg-club-green text-white">Preview</Badge>}
                     </div>
-                    <p className="mt-1 text-xs text-court-ink/50">{programme.time} · {programme.activities.join(' + ')}</p>
+                    {!deployedControlRoom && <p className="mt-1 text-xs text-court-ink/50">{programme.time} · {programme.activities.join(' + ')}</p>}
                   </button>
                   <div className="flex items-center gap-1">
-                    <Eye className="hidden size-4 text-court-ink/25 transition group-hover:text-club-green sm:block" />
+                    {!deployedControlRoom && <Eye className="hidden size-4 text-court-ink/25 transition group-hover:text-club-green sm:block" />}
                     {authToken && programmeIds.has(programme.id) && remoteProgramme && (
                       <Button disabled={adminBusy} onClick={() => onRemoteAction({ action: 'show_programme', programmeId: remoteProgramme.programmeId })} size="sm">Show now</Button>
                     )}
@@ -591,15 +598,15 @@ function ControlView({
           <Card className="border-0 bg-[#123a2e] text-white ring-0">
             <CardHeader>
               <CardTitle className="flex items-center gap-2"><Monitor className="text-tennis" /> Clubhouse TV</CardTitle>
-              <CardDescription className="text-white/55">Raspberry Pi 400 · HDMI display</CardDescription>
+              <CardDescription className="text-white/55">{deployedControlRoom ? 'Current cloud selection' : 'Raspberry Pi 400 · HDMI display'}</CardDescription>
             </CardHeader>
             <CardContent className="space-y-3">
-              <StatusRow icon={Wifi} label="Network" value="Connected" />
-              <StatusRow icon={CheckCircle2} label="Player" value="Healthy" />
-              <StatusRow icon={Clock3} label="Revision" value={remoteDevice ? String(remoteDevice.revision) : 'Sign in to inspect'} />
-              <StatusRow icon={Cloud} label="Source" value={remoteDevice?.activeSelection?.name ?? (lastRefresh ? formatRefreshTime(lastRefresh) : 'Waiting')} />
+              {!deployedControlRoom && <StatusRow icon={Wifi} label="Network" value="Connected" />}
+              {!deployedControlRoom && <StatusRow icon={CheckCircle2} label="Player" value="Healthy" />}
+              {!deployedControlRoom && <StatusRow icon={Clock3} label="Revision" value={remoteDevice ? String(remoteDevice.revision) : 'Sign in to inspect'} />}
+              <StatusRow icon={Cloud} label={deployedControlRoom ? 'Showing' : 'Source'} value={remoteDevice?.activeSelection?.name ?? (lastRefresh ? formatRefreshTime(lastRefresh) : 'Waiting')} />
               <div className="grid grid-cols-2 gap-2 pt-2">
-                <Button disabled={!authToken || adminBusy} onClick={() => onRemoteAction({ action: 'return_to_schedule' })} size="sm" variant="secondary">Return to schedule</Button>
+                <Button disabled={!authToken || adminBusy} onClick={() => onRemoteAction({ action: 'return_to_schedule' })} size="sm" variant="secondary">Restore default</Button>
                 <Button disabled={!authToken || adminBusy} onClick={() => onRemoteAction({ action: 'show_honours' })} size="sm" variant="secondary">Show honours</Button>
                 <Button className="col-span-2" disabled={!authToken || adminBusy} onClick={() => onRemoteAction({ action: 'refresh' })} size="sm" variant="outline"><RefreshCw /> Refresh TV now</Button>
               </div>
@@ -685,7 +692,7 @@ function ControlView({
           </CardContent>
         </Card>
 
-        <Card className="border-0 bg-white text-court-ink ring-0 lg:col-span-2">
+        {!deployedControlRoom && <Card className="border-0 bg-white text-court-ink ring-0 lg:col-span-2">
           <CardHeader className="border-b border-black/5">
             <CardTitle className="flex items-center gap-2 text-xl"><Presentation className="text-club-green" /> Google Slides source</CardTitle>
             <CardDescription>Paste a Google Slides sharing or published URL. In the installed player, private decks use a club-owned read-only service account.</CardDescription>
@@ -709,8 +716,8 @@ function ControlView({
               <Button className="col-span-2 mt-1 bg-club-green text-white hover:bg-club-green/90" onClick={onSaveSource}>Save source</Button>
             </div>
           </CardContent>
-        </Card>
-      </div>
+        </Card>}
+      </div>}
     </section>
   );
 }
