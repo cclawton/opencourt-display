@@ -14,7 +14,7 @@ if ! id "$target_user" >/dev/null 2>&1; then
   exit 1
 fi
 
-for required_file in player.html device-config.json opencourt-player opencourt-launch-local opencourt-kiosk.service honours-board.jpg; do
+for required_file in player.html device-config.json remote.json opencourt-player opencourt-launch-local opencourt-kiosk.service honours-board.jpg; do
   if [ ! -f "$payload_dir/$required_file" ]; then
     printf 'Missing installer payload: %s\n' "$required_file" >&2
     exit 1
@@ -38,6 +38,9 @@ install -o "$target_user" -g "$target_user" -m 0644 "$payload_dir/player.html" /
 install -o "$target_user" -g "$target_user" -m 0644 "$payload_dir/honours-board.jpg" /var/lib/opencourt/honours-board.jpg
 if [ ! -f /var/lib/opencourt/device-config.json ]; then
   install -o "$target_user" -g "$target_user" -m 0644 "$payload_dir/device-config.json" /var/lib/opencourt/device-config.json
+fi
+if [ ! -f /var/lib/opencourt/remote.json ]; then
+  install -o "$target_user" -g "$target_user" -m 0644 "$payload_dir/remote.json" /var/lib/opencourt/remote.json
 fi
 install -m 0755 "$payload_dir/opencourt-player" /usr/local/bin/opencourt-player
 install -m 0755 "$payload_dir/opencourt-launch-local" /usr/local/bin/opencourt-launch-local

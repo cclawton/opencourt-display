@@ -45,3 +45,25 @@ The initial configuration selects the bundled image and verifies it is 3840×216
 Increase `revision` whenever the selected source should reload. Chromium is restarted only for a changed revision, a changed target or a browser failure. Invalid configuration leaves the current browser and its last-known-good content running.
 
 Google returned a 403 when a published presentation was placed inside an iframe under a local player. The supervisor therefore opens Slides directly as Chromium's top-level page, which is also how the legacy kiosk operated. Local images continue through `player.html` so their expected pixel dimensions are checked before display.
+
+## Optional remote configuration
+
+`/var/lib/opencourt/remote.json` is a separate bootstrap file so a failed or incomplete remote document cannot remove the device's control endpoint. Remote polling is disabled by default:
+
+```json
+{
+  "schemaVersion": 1,
+  "deviceId": "honours-board-tv",
+  "configUrl": "https://display.example/devices/honours-board-tv/config"
+}
+```
+
+When configured, the supervisor:
+
+- requests the small JSON document using `If-None-Match` after the local last-known-good screen has launched;
+- requires HTTPS, a matching device ID, the supported schema and a valid source;
+- limits responses to 128 KiB;
+- writes an accepted document atomically to `device-config.json`; and
+- leaves the current browser untouched when DNS, Wi-Fi, the cloud endpoint or validation fails.
+
+The device endpoint must be anonymous and read-only and must never contain Wi-Fi, Google or administrator credentials. Administrative writes belong behind the authenticated control service, not on the Pi.

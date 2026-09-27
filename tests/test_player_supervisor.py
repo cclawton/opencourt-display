@@ -81,6 +81,104 @@ class PlayerSupervisorTests(unittest.TestCase):
             with self.assertRaises(PLAYER.ConfigError):
                 PLAYER.load_config(config_path)
 
+    def test_remote_settings_are_optional_and_require_https(self):
+        with tempfile.TemporaryDirectory() as directory:
+            settings_path = Path(directory) / "remote.json"
+            settings_path.write_text(
+                json.dumps(
+                    {
+                        "schemaVersion": 1,
+                        "deviceId": "honours-board-tv",
+                        "configUrl": "",
+                    }
+                ),
+                encoding="utf-8",
+            )
+            self.assertIsNone(PLAYER.load_remote_settings(settings_path))
+
+            settings_path.write_text(
+                json.dumps(
+                    {
+                        "schemaVersion": 1,
+                        "deviceId": "honours-board-tv",
+                        "configUrl": "http://example.com/config.json",
+                    }
+                ),
+                encoding="utf-8",
+            )
+            with self.assertRaises(PLAYER.ConfigError):
+                PLAYER.load_remote_settings(settings_path)
+
+    def test_remote_fetch_sends_etag_and_validates_device(self):
+        candidate = {
+            "schemaVersion": 1,
+            "deviceId": "honours-board-tv",
+            "revision": 4,
+            "pollIntervalSeconds": 60,
+            "source": {
+                "type": "google_slides",
+                "url": "https://docs.google.com/presentation/d/presentation-id/edit",
+            },
+        }
+        requests = []
+
+        class Response:
+            headers = {"Content-Length": "250", "ETag": '"revision-4"'}
+
+            def __enter__(self):
+                return self
+
+            def __exit__(self, *_args):
+                return False
+
+            def read(self, _limit):
+                return json.dumps(candidate).encode()
+
+        def opener(request, timeout):
+            requests.append((request, timeout))
+            return Response()
+
+        result, etag = PLAYER.fetch_remote_config(
+            {
+                "deviceId": "honours-board-tv",
+                "configUrl": "https://display.example/config.json",
+            },
+            '"revision-3"',
+            opener,
+        )
+
+        self.assertEqual(result, candidate)
+        self.assertEqual(etag, '"revision-4"')
+        self.assertEqual(requests[0][0].get_header("If-none-match"), '"revision-3"')
+        self.assertEqual(requests[0][1], 10)
+
+        candidate["deviceId"] = "another-tv"
+        with self.assertRaises(PLAYER.ConfigError):
+            PLAYER.fetch_remote_config(
+                {
+                    "deviceId": "honours-board-tv",
+                    "configUrl": "https://display.example/config.json",
+                },
+                None,
+                opener,
+            )
+
+    def test_atomic_config_write_replaces_complete_document(self):
+        with tempfile.TemporaryDirectory() as directory:
+            config_path = Path(directory) / "device-config.json"
+            config_path.write_text("old", encoding="utf-8")
+            candidate = {
+                "schemaVersion": 1,
+                "deviceId": "honours-board-tv",
+                "revision": 5,
+                "source": {"type": "google_slides"},
+            }
+
+            PLAYER.write_config_atomically(candidate, config_path)
+
+            self.assertEqual(json.loads(config_path.read_text(encoding="utf-8")), candidate)
+            self.assertFalse(config_path.with_suffix(".json.tmp").exists())
+
 
 if __name__ == "__main__":
     unittest.main()

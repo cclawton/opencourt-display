@@ -11,11 +11,15 @@ import subprocess
 import sys
 from threading import Event
 from typing import Any
+from urllib.error import HTTPError
 from urllib.parse import parse_qsl, urlencode, urlparse, urlunparse
+from urllib.request import Request, urlopen
 
 CONTENT_DIR = Path(os.environ.get("OPENCOURT_CONTENT_DIR", "/var/lib/opencourt"))
 CONFIG_PATH = Path(os.environ.get("OPENCOURT_CONFIG", CONTENT_DIR / "device-config.json"))
+REMOTE_PATH = Path(os.environ.get("OPENCOURT_REMOTE", CONTENT_DIR / "remote.json"))
 CHROMIUM = os.environ.get("OPENCOURT_CHROMIUM", "/usr/bin/chromium")
+MAX_CONFIG_BYTES = 128 * 1024
 STOP = Event()
 
 
@@ -32,6 +36,77 @@ def load_config(path: Path = CONFIG_PATH) -> dict[str, Any]:
     if not isinstance(config.get("source"), dict):
         raise ConfigError("source is required")
     return config
+
+
+def load_remote_settings(path: Path = REMOTE_PATH) -> dict[str, str] | None:
+    settings = json.loads(path.read_text(encoding="utf-8"))
+    if settings.get("schemaVersion") != 1:
+        raise ConfigError("remote schemaVersion must be 1")
+
+    device_id = str(settings.get("deviceId", "")).strip()
+    config_url = str(settings.get("configUrl", "")).strip()
+    if not device_id:
+        raise ConfigError("remote deviceId is required")
+    if not config_url:
+        return None
+
+    parsed = urlparse(config_url)
+    allow_http = os.environ.get("OPENCOURT_ALLOW_HTTP") == "1"
+    if parsed.scheme != "https" and not (allow_http and parsed.scheme == "http"):
+        raise ConfigError("remote config URL must use HTTPS")
+    if not parsed.netloc or parsed.username or parsed.password:
+        raise ConfigError("remote config URL is invalid")
+
+    return {"deviceId": device_id, "configUrl": config_url}
+
+
+def fetch_remote_config(
+    settings: dict[str, str],
+    etag: str | None,
+    opener: Any = None,
+) -> tuple[dict[str, Any] | None, str | None]:
+    headers = {"Accept": "application/json", "User-Agent": "OpenCourt-Display/0.1"}
+    if etag:
+        headers["If-None-Match"] = etag
+    request = Request(settings["configUrl"], headers=headers)
+    open_request = opener or urlopen
+
+    try:
+        with open_request(request, timeout=10) as response:
+            content_length = response.headers.get("Content-Length")
+            if content_length and int(content_length) > MAX_CONFIG_BYTES:
+                raise ConfigError("remote config is too large")
+            payload = response.read(MAX_CONFIG_BYTES + 1)
+            if len(payload) > MAX_CONFIG_BYTES:
+                raise ConfigError("remote config is too large")
+            candidate = json.loads(payload.decode("utf-8"))
+            response_etag = response.headers.get("ETag")
+    except HTTPError as error:
+        if error.code == 304:
+            return None, etag
+        raise
+
+    validate_remote_config(candidate, settings["deviceId"])
+    target_url(candidate)
+    return candidate, response_etag
+
+
+def validate_remote_config(config: dict[str, Any], device_id: str) -> None:
+    if config.get("schemaVersion") != 1:
+        raise ConfigError("remote config schemaVersion must be 1")
+    if str(config.get("deviceId", "")) != device_id:
+        raise ConfigError("remote config deviceId does not match this display")
+    if not str(config.get("revision", "")):
+        raise ConfigError("remote config revision is required")
+    if not isinstance(config.get("source"), dict):
+        raise ConfigError("remote config source is required")
+
+
+def write_config_atomically(config: dict[str, Any], path: Path = CONFIG_PATH) -> None:
+    temporary_path = path.with_suffix(f"{path.suffix}.tmp")
+    temporary_path.write_text(f"{json.dumps(config, indent=2)}\n", encoding="utf-8")
+    temporary_path.chmod(0o644)
+    temporary_path.replace(path)
 
 
 def google_slides_url(value: str) -> str:
@@ -131,15 +206,17 @@ def main() -> int:
     browser: subprocess.Popen[Any] | None = None
     active_revision: str | None = None
     active_url: str | None = None
+    remote_etag: str | None = None
     poll_seconds = 60
 
     try:
         while not STOP.is_set():
+            local_config: dict[str, Any] | None = None
             try:
-                config = load_config()
-                candidate_revision = str(config["revision"])
-                candidate_url = target_url(config)
-                poll_seconds = max(15, int(config.get("pollIntervalSeconds", 60)))
+                local_config = load_config()
+                candidate_revision = str(local_config["revision"])
+                candidate_url = target_url(local_config)
+                poll_seconds = max(15, int(local_config.get("pollIntervalSeconds", 60)))
 
                 if (
                     browser is None
@@ -150,7 +227,7 @@ def main() -> int:
                     stop_browser(browser)
                     print(
                         f"OpenCourt: launching revision {candidate_revision} "
-                        f"({config['source']['type']})",
+                        f"({local_config['source']['type']})",
                         flush=True,
                     )
                     browser = subprocess.Popen(browser_command(candidate_url))
@@ -158,6 +235,20 @@ def main() -> int:
                     active_url = candidate_url
             except (ConfigError, json.JSONDecodeError, OSError, TypeError, ValueError) as error:
                 print(f"OpenCourt: keeping last-known-good content: {error}", file=sys.stderr, flush=True)
+
+            try:
+                remote_settings = load_remote_settings()
+                if remote_settings:
+                    remote_config, remote_etag = fetch_remote_config(remote_settings, remote_etag)
+                    if remote_config is not None and remote_config != local_config:
+                        write_config_atomically(remote_config)
+                        print(
+                            f"OpenCourt: accepted remote revision {remote_config['revision']}",
+                            flush=True,
+                        )
+                        continue
+            except (ConfigError, HTTPError, json.JSONDecodeError, OSError, TypeError, ValueError) as error:
+                print(f"OpenCourt: remote update skipped: {error}", file=sys.stderr, flush=True)
 
             STOP.wait(poll_seconds)
     finally:

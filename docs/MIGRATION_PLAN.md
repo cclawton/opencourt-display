@@ -141,6 +141,7 @@ The current laptop prototype uses `vinext`, Wrangler and a Cloudflare-specific V
 - Google returned a 403 when the published Saturday Morning presentation was placed inside an iframe, even though the same URL was public and returned HTTP 200. Off-screen Pi renders confirmed the presentation worked when Google Slides was the browser's top-level page and failed only when framed.
 - Replaced iframe switching with a small standard-library Python supervisor. It validates JSON configuration, keeps the current browser when a candidate configuration is invalid, and restarts Chromium only for a changed revision, changed source or browser failure. It opens images through the local dimension-checking player and Google Slides directly at top level.
 - Installed the supervisor on `opencourt-honours`. Revision 2 switched from the honours image to the legacy Saturday Morning presentation, which displayed “Winter Grand Final 2026” without error. Revision 3 then returned the TV to the local honours board without a service restart or manual browser action.
+- Added an optional, separately bootstrapped remote configuration URL. The Pi always launches its local last-known-good document first, then uses HTTPS conditional requests, a 128 KiB response limit, device-ID/schema/source validation and atomic replacement. Remote polling is disabled until the authenticated AWS control endpoint is ready.
 
 ### Phase 3: committee control plane
 
