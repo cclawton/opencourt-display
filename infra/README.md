@@ -35,7 +35,7 @@ npx cdk deploy \
 
 Do not deploy until the target AWS account and region have been confirmed. After deployment, seed the table with an approved device configuration, test the read-only endpoint and only then place its HTTPS URL in the Pi's private `/var/lib/opencourt/remote.json` bootstrap file.
 
-The parameters keep resource names and ownership tags portable. The table is retained and deletion-protected, while the Lambda logs are intentionally short-lived. See [MIGRATION.md](MIGRATION.md) for the later move to a club-owned AWS account.
+The parameters keep resource names and ownership tags portable. The application stack has termination protection, the table is retained and deletion-protected, and the Lambda logs are intentionally short-lived. Bootstrap with termination protection as well. See [MIGRATION.md](MIGRATION.md) for the later move to a club-owned AWS account.
 
 The initial seed is a local administrative action, not a public API:
 

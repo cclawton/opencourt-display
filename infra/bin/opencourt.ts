@@ -11,4 +11,5 @@ new OpenCourtControlStack(app, 'OpenCourtControl', {
     region: process.env.CDK_DEFAULT_REGION ?? 'ap-southeast-2',
   },
   description: 'Cost-minimal OpenCourt display configuration control plane',
+  terminationProtection: true,
 });
