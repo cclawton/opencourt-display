@@ -194,9 +194,16 @@ export class OpenCourtControlStack extends cdk.Stack {
     });
 
     const securityHeaders = new cloudfront.ResponseHeadersPolicy(this, 'SecurityHeaders', {
+      customHeadersBehavior: {
+        customHeaders: [{
+          header: 'Cross-Origin-Opener-Policy',
+          value: 'same-origin-allow-popups',
+          override: true,
+        }],
+      },
       securityHeadersBehavior: {
         contentSecurityPolicy: {
-          contentSecurityPolicy: "default-src 'self'; script-src 'self' https://accounts.google.com/gsi/client; connect-src 'self' https://*.lambda-url.ap-southeast-2.on.aws https://*.s3.ap-southeast-2.amazonaws.com; frame-src https://accounts.google.com/gsi/; img-src 'self' data: https://*.googleusercontent.com; style-src 'self' 'unsafe-inline'; object-src 'none'; base-uri 'none'; frame-ancestors 'none'",
+          contentSecurityPolicy: "default-src 'self'; script-src 'self' https://accounts.google.com/gsi/client; connect-src 'self' https://accounts.google.com/gsi/ https://*.lambda-url.ap-southeast-2.on.aws https://*.s3.ap-southeast-2.amazonaws.com; frame-src https://accounts.google.com/gsi/; img-src 'self' data: https://*.googleusercontent.com; style-src 'self' 'unsafe-inline' https://accounts.google.com/gsi/style; object-src 'none'; base-uri 'none'; frame-ancestors 'none'",
           override: true,
         },
         contentTypeOptions: { override: true },
