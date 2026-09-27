@@ -40,6 +40,8 @@ AWS serverless is the selected production platform. The browser application will
 
 The existing `vinext`/Wrangler build is a local prototype dependency and will be replaced before production deployment. The Raspberry Pi player and its provider interfaces remain hosting-neutral.
 
+The first AWS infrastructure increment is implemented in `infra/`: an on-demand DynamoDB table and a 128 MB ARM Lambda Function URL expose only `GET /devices/{deviceId}/config`. Responses contain a whitelisted public configuration shape and an ETag; matching `If-None-Match` requests return 304. Lambda concurrency is capped at two, logs expire after seven days, and the deployment requires actual-cost alerts at USD $1, $5 and $10. No public administrative write route exists.
+
 ### Raspberry Pi appliance
 
 The image uses Raspberry Pi OS Trixie components, Cage as the minimal Wayland kiosk and Chromium as the player. A first-boot service collects Wi-Fi, administrator and initial Slides settings locally. The kiosk is supervised by `systemd` and restarts after failure or reboot.

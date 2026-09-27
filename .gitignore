@@ -1,5 +1,6 @@
 # dependencies
 /node_modules
+**/node_modules/
 /.pnp
 .pnp.*
 .yarn/*
@@ -38,6 +39,8 @@ next-env.d.ts
 /.wrangler/
 /outputs/
 /work/
+infra/cdk.out/
+infra/dist/
 
 # local research/reference screenshots (not redistributable project assets)
 /signal-*.jpg

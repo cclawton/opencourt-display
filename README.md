@@ -43,6 +43,12 @@ The image source is in [`image/`](image/README.md). It targets the Raspberry Pi 
 
 No club password or Google credential is committed to the image or repository. The image build is designed to run on a supported ARM64 Debian/Raspberry Pi OS host or through the manual GitHub Actions workflow.
 
+## AWS control plane
+
+The cost-minimal read-only device configuration stack is in [`infra/`](infra/README.md). It defines a pay-per-request DynamoDB table, a small ARM Lambda Function URL with ETag support, a guarded seed command and mandatory low-dollar billing alerts. It is synthesized and tested but is not deployed by the repository's automated checks.
+
+Administrative writes remain disabled until Google Workspace ID-token verification and an explicit committee allow-list are implemented.
+
 ## Product model
 
 OpenCourt schedules **display programmes**, not competitions. A programme represents the complete court allocation for a time window and may contain multiple simultaneous activities. One-off events can replace or supplement the regular programme.

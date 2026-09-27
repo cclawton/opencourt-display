@@ -152,6 +152,13 @@ The current laptop prototype uses `vinext`, Wrangler and a Cloudflare-specific V
 - Test preview, show-now, return-to-schedule and refresh operations.
 - Apply request limits, audit logging, backups, AWS Budgets and low-value billing alerts.
 
+#### Phase 3 implementation status — 27 September 2026
+
+- Added and synthesized the isolated AWS CDK package in `infra/` for Sydney (`ap-southeast-2`). It defines a pay-per-request DynamoDB table, a 128 MB ARM Lambda with reserved concurrency of two, a GET-only Function URL, seven-day logs and mandatory actual-cost alerts at USD $1, $5 and $10.
+- Added public configuration projection, ETag/304 handling, malformed-path handling and contract tests. The Lambda role has only `dynamodb:GetItem`; no public write route is present.
+- Added a guarded local seed command that validates image/Google Slides providers and allows only a strictly newer revision to replace an existing device item.
+- The AWS account is authenticated but not yet CDK-bootstrapped. No cloud resources have been created. Deployment awaits confirmation of the billing-alert email address; Google-authenticated committee writes and static control-room hosting remain subsequent increments.
+
 ### Phase 4: coexistence at the club
 
 - Install the new Pi behind the honours-board Bravia.

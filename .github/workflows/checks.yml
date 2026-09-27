@@ -29,3 +29,20 @@ jobs:
         run: sh -n image/opencourt-firstboot image/opencourt-launch image/build-image.sh
       - name: Check live-player Python
         run: python3 -m py_compile deploy/pi-live/opencourt-player
+
+  infrastructure:
+    runs-on: ubuntu-24.04
+    defaults:
+      run:
+        working-directory: infra
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: infra/package-lock.json
+      - run: npm ci
+      - run: npm test
+      - run: npm run build
+      - run: npm run synth
