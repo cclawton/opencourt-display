@@ -45,7 +45,7 @@ No club password or Google credential is committed to the image or repository. T
 
 ## AWS control plane
 
-The cost-minimal read-only device configuration stack is in [`infra/`](infra/README.md). It defines a pay-per-request DynamoDB table, a small ARM Lambda Function URL with ETag support, a guarded seed command and mandatory low-dollar billing alerts. It is synthesized and tested but is not deployed by the repository's automated checks.
+The cost-minimal read-only device configuration stack is in [`infra/`](infra/README.md). It defines a pay-per-request DynamoDB table, a small ARM Lambda Function URL with ETag support, a guarded seed command and mandatory low-dollar billing alerts. It is synthesized and tested but is not deployed by the repository's automated checks. Resource names and ownership tags are parameterised, with a [club-account migration runbook](infra/MIGRATION.md) for later transfer out of the pilot account.
 
 Administrative writes remain disabled until Google Workspace ID-token verification and an explicit committee allow-list are implemented.
 

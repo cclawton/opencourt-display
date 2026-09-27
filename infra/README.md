@@ -26,16 +26,22 @@ npm run synth
 Deployment requires an explicit billing-alert email:
 
 ```bash
-npx cdk deploy --parameters BillingAlertEmail=owner@example.com
+npx cdk deploy \
+  --parameters BillingAlertEmail=owner@example.com \
+  --parameters ClubSlug=heatherdale \
+  --parameters DeploymentStage=pilot \
+  --parameters DeploymentOwner=personal-pilot
 ```
 
 Do not deploy until the target AWS account and region have been confirmed. After deployment, seed the table with an approved device configuration, test the read-only endpoint and only then place its HTTPS URL in the Pi's private `/var/lib/opencourt/remote.json` bootstrap file.
+
+The parameters keep resource names and ownership tags portable. The table is retained and deletion-protected, while the Lambda logs are intentionally short-lived. See [MIGRATION.md](MIGRATION.md) for the later move to a club-owned AWS account.
 
 The initial seed is a local administrative action, not a public API:
 
 ```bash
 npm run seed -- \
-  --table opencourt-device-configurations \
+  --table opencourt-heatherdale-pilot-device-configurations \
   --file examples/honours-board-tv.json \
   --region ap-southeast-2
 ```

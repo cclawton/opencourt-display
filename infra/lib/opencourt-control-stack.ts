@@ -19,16 +19,46 @@ export class OpenCourtControlStack extends cdk.Stack {
       constraintDescription: 'Enter a valid email address.',
     });
 
+    const clubSlug = new cdk.CfnParameter(this, 'ClubSlug', {
+      type: 'String',
+      default: 'heatherdale',
+      description: 'Short lowercase club identifier used in resource names and tags.',
+      allowedPattern: '^[a-z0-9][a-z0-9-]{1,19}$',
+      constraintDescription: 'Use 2-20 lowercase letters, digits or hyphens.',
+    });
+
+    const deploymentStage = new cdk.CfnParameter(this, 'DeploymentStage', {
+      type: 'String',
+      default: 'pilot',
+      description: 'Lifecycle stage for this deployment.',
+      allowedValues: ['pilot', 'production'],
+    });
+
+    const deploymentOwner = new cdk.CfnParameter(this, 'DeploymentOwner', {
+      type: 'String',
+      default: 'personal-pilot',
+      description: 'Operational owner identifier; use club-owned after account migration.',
+      allowedPattern: '^[a-z0-9][a-z0-9-]{1,31}$',
+      constraintDescription: 'Use 2-32 lowercase letters, digits or hyphens.',
+    });
+
+    const resourcePrefix = cdk.Fn.join('-', [
+      'opencourt',
+      clubSlug.valueAsString,
+      deploymentStage.valueAsString,
+    ]);
+
     const table = new dynamodb.Table(this, 'DeviceConfigurations', {
-      tableName: 'opencourt-device-configurations',
+      tableName: cdk.Fn.join('-', [resourcePrefix, 'device-configurations']),
       partitionKey: { name: 'deviceId', type: dynamodb.AttributeType.STRING },
       billingMode: dynamodb.BillingMode.PAY_PER_REQUEST,
       pointInTimeRecoverySpecification: { pointInTimeRecoveryEnabled: false },
+      deletionProtection: true,
       removalPolicy: cdk.RemovalPolicy.RETAIN,
       encryption: dynamodb.TableEncryption.AWS_MANAGED,
     });
 
-    const functionName = 'opencourt-control-api';
+    const functionName = cdk.Fn.join('-', [resourcePrefix, 'control-api']);
     new logs.LogGroup(this, 'ControlApiLogs', {
       logGroupName: `/aws/lambda/${functionName}`,
       retention: logs.RetentionDays.ONE_WEEK,
@@ -67,7 +97,7 @@ export class OpenCourtControlStack extends cdk.Stack {
 
     new budgets.CfnBudget(this, 'MonthlyCostGuardrail', {
       budget: {
-        budgetName: 'OpenCourt monthly cost guardrail',
+        budgetName: cdk.Fn.join('-', [resourcePrefix, 'monthly-cost-guardrail']),
         budgetType: 'COST',
         timeUnit: 'MONTHLY',
         budgetLimit: { amount: 10, unit: 'USD' },
@@ -88,10 +118,35 @@ export class OpenCourtControlStack extends cdk.Stack {
       })),
     });
 
+    const deploymentTagOptions: cdk.TagProps = {
+      excludeResourceTypes: ['aws:cdk:stack'],
+    };
+
     cdk.Tags.of(this).add('Application', 'OpenCourt Display');
+    cdk.Tags.of(this).add('Club', clubSlug.valueAsString, deploymentTagOptions);
+    cdk.Tags.of(this).add('DataClassification', 'public-device-configuration');
+    cdk.Tags.of(this).add(
+      'DeploymentStage',
+      deploymentStage.valueAsString,
+      deploymentTagOptions,
+    );
     cdk.Tags.of(this).add('ManagedBy', 'AWS CDK');
+    cdk.Tags.of(this).add('MigrationTarget', 'club-owned-aws-account');
+    cdk.Tags.of(this).add(
+      'OperationalOwner',
+      deploymentOwner.valueAsString,
+      deploymentTagOptions,
+    );
+    cdk.Tags.of(this).add('Repository', 'github.com/cclawton/opencourt-display');
 
     new cdk.CfnOutput(this, 'DeviceConfigTableName', { value: table.tableName });
     new cdk.CfnOutput(this, 'DeviceConfigBaseUrl', { value: functionUrl.url });
+    new cdk.CfnOutput(this, 'DeploymentIdentity', {
+      value: cdk.Fn.join('/', [
+        clubSlug.valueAsString,
+        deploymentStage.valueAsString,
+        deploymentOwner.valueAsString,
+      ]),
+    });
   }
 }
