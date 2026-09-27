@@ -1,4 +1,4 @@
-const CACHE = 'opencourt-shell-v1';
+const CACHE = 'opencourt-shell-v2';
 
 self.addEventListener('install', (event) => {
   event.waitUntil(caches.open(CACHE).then((cache) => cache.add('/')));
@@ -14,6 +14,15 @@ self.addEventListener('activate', (event) => {
 
 self.addEventListener('fetch', (event) => {
   if (event.request.method !== 'GET' || new URL(event.request.url).origin !== self.location.origin) return;
+  const pathname = new URL(event.request.url).pathname;
+  if (pathname === '/runtime-config.js' || pathname === '/sw.js') {
+    event.respondWith(fetch(event.request, { cache: 'no-store' }).then((response) => {
+      const copy = response.clone();
+      caches.open(CACHE).then((cache) => cache.put(event.request, copy));
+      return response;
+    }).catch(() => caches.match(event.request)));
+    return;
+  }
   if (event.request.mode === 'navigate') {
     event.respondWith(fetch(event.request).then((response) => {
       const copy = response.clone();
