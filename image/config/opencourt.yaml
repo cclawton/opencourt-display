@@ -1,0 +1,18 @@
+include:
+  file: trixie-minbase-ab.yaml
+
+device:
+  layer: rpi4
+  hostname: opencourt-display
+  user1: opencourt
+
+image:
+  system_part_size: 1800M
+  data_part_size: 1G
+  name: opencourt-display-rpi4
+
+layer:
+  app: opencourt-kiosk
+
+opencourt:
+  app_url: https://example.invalid

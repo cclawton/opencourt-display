@@ -1,0 +1,27 @@
+[Unit]
+Description=OpenCourt local honours-board kiosk
+After=network-online.target systemd-user-sessions.service
+Wants=network-online.target
+Conflicts=getty@tty1.service
+
+[Service]
+Type=simple
+User=opencourt
+PAMName=login
+TTYPath=/dev/tty1
+StandardInput=tty-force
+StandardOutput=journal
+StandardError=journal
+TTYReset=yes
+TTYVHangup=yes
+TTYVTDisallocate=yes
+RuntimeDirectory=opencourt
+RuntimeDirectoryMode=0700
+Environment=XDG_RUNTIME_DIR=/run/opencourt
+Environment=WLR_LIBINPUT_NO_DEVICES=1
+ExecStart=/usr/bin/cage -- /usr/local/bin/opencourt-launch-local
+Restart=always
+RestartSec=3
+
+[Install]
+WantedBy=multi-user.target

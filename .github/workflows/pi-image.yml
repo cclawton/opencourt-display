@@ -1,0 +1,49 @@
+name: Build Raspberry Pi image
+
+on:
+  workflow_dispatch:
+    inputs:
+      app_url:
+        description: Public HTTPS OpenCourt application URL
+        required: true
+        type: string
+
+permissions:
+  contents: read
+
+jobs:
+  image:
+    runs-on: ubuntu-24.04-arm
+    timeout-minutes: 120
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Build on Debian Trixie ARM64
+        env:
+          OPENCOURT_APP_URL: ${{ inputs.app_url }}
+        run: |
+          mkdir -p outputs
+          docker run --rm --privileged \
+            -e OPENCOURT_APP_URL \
+            -v "$PWD:/workspace" \
+            -w /workspace \
+            debian:trixie-slim \
+            bash -lc '
+              apt-get update
+              apt-get install -y ca-certificates git xz-utils
+              git clone --depth 1 --branch v2.6.0 https://github.com/raspberrypi/rpi-image-gen.git /opt/rpi-image-gen
+              /opt/rpi-image-gen/install_deps.sh
+              chmod +x image/build-image.sh image/opencourt-firstboot image/opencourt-launch
+              RPI_IMAGE_GEN_DIR=/opt/rpi-image-gen image/build-image.sh
+              image_path=$(find /opt/rpi-image-gen/work -type f -name "*.img" | head -1)
+              test -n "$image_path"
+              xz -T0 -9 "$image_path"
+              cp "$image_path.xz" /workspace/outputs/opencourt-display-rpi4.img.xz
+            '
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: opencourt-display-rpi4
+          path: outputs/opencourt-display-rpi4.img.xz
+          if-no-files-found: error
+          retention-days: 14

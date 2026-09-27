@@ -1,0 +1,26 @@
+#!/bin/sh
+set -eu
+
+config_file=/var/lib/opencourt/device.conf
+presentation_id=
+
+if [ -r "$config_file" ]; then
+  # The file contains only values validated by opencourt-firstboot.
+  . "$config_file"
+fi
+
+display_url="${OPENCOURT_APP_URL%/}/?device=1"
+if [ -n "${OPENCOURT_PRESENTATION_ID:-}" ]; then
+  case "$OPENCOURT_PRESENTATION_ID" in
+    e/*) display_url="$display_url&published=${OPENCOURT_PRESENTATION_ID#e/}" ;;
+    *) display_url="$display_url&presentation=$OPENCOURT_PRESENTATION_ID" ;;
+  esac
+fi
+
+exec /usr/bin/chromium "$display_url" \
+  --kiosk \
+  --noerrdialogs \
+  --disable-infobars \
+  --no-first-run \
+  --disable-session-crashed-bubble \
+  --start-maximized

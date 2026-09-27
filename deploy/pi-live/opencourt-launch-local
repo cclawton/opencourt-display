@@ -1,0 +1,16 @@
+#!/bin/sh
+set -eu
+
+exec /usr/bin/chromium \
+  --kiosk \
+  --noerrdialogs \
+  --disable-infobars \
+  --no-first-run \
+  --disable-session-crashed-bubble \
+  --disable-translate \
+  --disable-pinch \
+  --overscroll-history-navigation=0 \
+  --enable-features=UseOzonePlatform \
+  --ozone-platform=wayland \
+  --disk-cache-dir=/var/cache/opencourt/chromium \
+  file:///var/lib/opencourt/player.html

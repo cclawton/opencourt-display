@@ -1,0 +1,26 @@
+# METABEGIN
+# X-Env-Layer-Name: opencourt-kiosk
+# X-Env-Layer-Category: app
+# X-Env-Layer-Desc: OpenCourt first-boot provisioning and Chromium kiosk.
+# X-Env-Layer-Requires: rpi-user-credentials,systemd-net-min,systemd-timesyncd
+# X-Env-VarPrefix: opencourt
+# X-Env-Var-app_url: https://example.invalid
+# X-Env-Var-app_url-Desc: Public OpenCourt application URL loaded by the kiosk.
+# X-Env-Var-app_url-Required: y
+# X-Env-Var-app_url-Valid: regex:^https://[a-zA-Z0-9.-]+[a-zA-Z0-9]/?.*$
+# X-Env-Var-app_url-Set: y
+# METAEND
+---
+mmdebstrap:
+  packages:
+    - cage
+    - chromium
+  customize-hooks:
+    - |
+      export OPENCOURT_USER="$IGconf_device_user1"
+      export OPENCOURT_APP_URL="$IGconf_opencourt_app_url"
+      envsubst < opencourt-kiosk.service.tpl > "$1/etc/systemd/system/opencourt-kiosk.service"
+      install -m 0644 opencourt-firstboot.service "$1/etc/systemd/system/opencourt-firstboot.service"
+      install -m 0755 opencourt-firstboot "$1/usr/local/sbin/opencourt-firstboot"
+      install -m 0755 opencourt-launch "$1/usr/local/bin/opencourt-launch"
+    - $BDEBSTRAP_HOOKS/enable-units "$1" opencourt-firstboot opencourt-kiosk

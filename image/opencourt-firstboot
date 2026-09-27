@@ -1,0 +1,81 @@
+#!/bin/sh
+set -eu
+
+restore_tty() {
+  stty echo 2>/dev/null || true
+}
+trap restore_tty EXIT INT TERM
+
+clear
+printf '\n  OpenCourt Display — first boot\n'
+printf '  --------------------------------\n\n'
+printf '  This setup creates the one club administrator, connects Wi-Fi,\n'
+printf '  and records the first Google Slides presentation.\n\n'
+
+wifi_interface=$(iwctl device list 2>/dev/null | awk '/station/ {print $2; exit}')
+if [ -z "$wifi_interface" ]; then
+  wifi_interface=wlan0
+fi
+
+while :; do
+  printf 'Wi-Fi network name: '
+  IFS= read -r wifi_ssid
+  [ -n "$wifi_ssid" ] && break
+  printf 'A network name is required.\n'
+done
+
+printf 'Wi-Fi password: '
+stty -echo
+IFS= read -r wifi_password
+stty echo
+printf '\nConnecting to %s...\n' "$wifi_ssid"
+
+if ! iwctl --passphrase "$wifi_password" station "$wifi_interface" connect "$wifi_ssid"; then
+  printf '\nCould not connect. Check the network details and reboot to try again.\n'
+  exit 1
+fi
+unset wifi_password
+
+while :; do
+  printf '\nChoose an administrator password (12+ characters): '
+  stty -echo
+  IFS= read -r admin_password
+  stty echo
+  printf '\nRepeat the administrator password: '
+  stty -echo
+  IFS= read -r admin_password_confirm
+  stty echo
+  printf '\n'
+  if [ "${#admin_password}" -lt 12 ]; then
+    printf 'The password must be at least 12 characters.\n'
+  elif [ "$admin_password" != "$admin_password_confirm" ]; then
+    printf 'The passwords did not match.\n'
+  else
+    break
+  fi
+done
+printf 'opencourt:%s\n' "$admin_password" | chpasswd
+unset admin_password admin_password_confirm
+
+while :; do
+  printf '\nGoogle Slides sharing or published URL: '
+  IFS= read -r slides_url
+  presentation_id=$(printf '%s\n' "$slides_url" | sed -n 's#^https://docs\.google\.com/presentation/d/e/\([^/]*\)/.*#e/\1#p')
+  if [ -z "$presentation_id" ]; then
+    presentation_id=$(printf '%s\n' "$slides_url" | sed -n 's#^https://docs\.google\.com/presentation/d/\([^/]*\)/.*#\1#p')
+  fi
+  case "$presentation_id" in
+    ''|*[!a-zA-Z0-9_/-]*) printf 'That does not look like a Google Slides URL.\n' ;;
+    *) break ;;
+  esac
+done
+
+install -d -m 0755 /var/lib/opencourt
+umask 022
+{
+  printf 'OPENCOURT_PRESENTATION_ID=%s\n' "$presentation_id"
+} > /var/lib/opencourt/device.conf
+touch /var/lib/opencourt/setup-complete
+
+printf '\nSetup complete. OpenCourt is starting now.\n'
+sleep 2
