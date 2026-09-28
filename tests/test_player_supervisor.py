@@ -25,15 +25,15 @@ class PlayerSupervisorTests(unittest.TestCase):
         self.assertEqual(
             PLAYER.google_slides_url(value),
             "https://docs.google.com/presentation/d/e/published-id/embed"
-            "?start=true&loop=true&delayms=10000",
+            "?start=true&loop=true&delayms=10000&rm=minimal",
         )
 
-    def test_viewer_url_becomes_top_level_present(self):
+    def test_viewer_url_becomes_minimal_top_level_preview(self):
         value = "https://docs.google.com/presentation/d/presentation-id/edit?usp=sharing"
         self.assertEqual(
             PLAYER.google_slides_url(value),
-            "https://docs.google.com/presentation/d/presentation-id/present"
-            "?usp=sharing&start=true&loop=true&delayms=10000",
+            "https://docs.google.com/presentation/d/presentation-id/preview"
+            "?usp=sharing&start=true&loop=true&delayms=10000&rm=minimal",
         )
 
     def test_non_google_slides_url_is_rejected(self):

@@ -162,7 +162,7 @@ export class OpenCourtControlStack extends cdk.Stack {
     });
     controlApi.node.addDependency(table);
     controlApi.addToRolePolicy(new iam.PolicyStatement({
-      actions: ['dynamodb:GetItem'],
+      actions: ['dynamodb:GetItem', 'dynamodb:PutItem'],
       resources: [table.tableArn],
     }));
     controlApi.addToRolePolicy(new iam.PolicyStatement({

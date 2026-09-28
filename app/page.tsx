@@ -92,12 +92,22 @@ const afternoonAllocations = [
 function normaliseSlidesUrl(value: string) {
   const trimmed = value.trim();
   if (!trimmed.includes('docs.google.com/presentation')) return '';
-  if (trimmed.includes('/embed')) return trimmed;
-  if (trimmed.includes('/d/e/')) {
-    return trimmed.replace(/\/pub.*$/, '/embed?start=true&loop=true&delayms=10000');
+  try {
+    const parsed = new URL(trimmed);
+    const parts = parsed.pathname.split('/').filter(Boolean);
+    if (parts[0] !== 'presentation' || parts[1] !== 'd') return '';
+    if (parts[2] === 'e' && parts[3]) parsed.pathname = `/presentation/d/e/${parts[3]}/embed`;
+    else if (parts[2]) parsed.pathname = `/presentation/d/${parts[2]}/preview`;
+    else return '';
+    parsed.search = '';
+    parsed.searchParams.set('start', 'true');
+    parsed.searchParams.set('loop', 'true');
+    parsed.searchParams.set('delayms', '10000');
+    parsed.searchParams.set('rm', 'minimal');
+    return parsed.toString();
+  } catch {
+    return '';
   }
-  const match = trimmed.match(/\/presentation\/d\/([^/]+)/);
-  return match ? `https://docs.google.com/presentation/d/${match[1]}/embed?start=true&loop=true&delayms=10000` : '';
 }
 
 function formatRefreshTime(date: Date) {
@@ -154,7 +164,9 @@ export default function Home() {
     try {
       const device = await issueDeviceAction(runtimeConfig, authToken, action);
       setRemoteDevice(device);
-      setAdminMessage(`Updated revision ${device.revision}. The Pi will poll within ${device.pollIntervalSeconds} seconds.`);
+      setAdminMessage(action.action === 'refresh'
+        ? 'TV refresh requested. It should reload within one minute.'
+        : `${device.activeSelection?.name ?? 'Display'} selected. The TV should update within one minute.`);
     } catch (error) {
       setAdminError(error instanceof Error ? error.message : 'Unable to update the display.');
     } finally {
@@ -622,8 +634,9 @@ function ControlView({
               <div className="grid grid-cols-2 gap-2 pt-2">
                 <Button disabled={!authToken || adminBusy} onClick={() => onRemoteAction({ action: 'return_to_schedule' })} size="sm" variant="secondary">Restore default</Button>
                 <Button disabled={!authToken || adminBusy} onClick={() => onRemoteAction({ action: 'show_honours' })} size="sm" variant="secondary">Show honours</Button>
-                <Button className="col-span-2" disabled={!authToken || adminBusy} onClick={() => onRemoteAction({ action: 'refresh' })} size="sm" variant="outline"><RefreshCw /> Refresh TV now</Button>
+                <Button className="col-span-2 bg-white text-club-green hover:bg-white/90 hover:text-club-green" disabled={!authToken || adminBusy} onClick={() => onRemoteAction({ action: 'refresh' })} size="sm" variant="secondary"><RefreshCw /> Refresh TV now</Button>
               </div>
+              <a className="flex items-center justify-center gap-2 rounded-lg border border-white/20 px-3 py-2 text-sm font-bold text-white transition hover:bg-white/10" href="#honours-board-image"><ImageIcon className="size-4 text-tennis" /> Update honours board image</a>
             </CardContent>
           </Card>
 
@@ -648,15 +661,15 @@ function ControlView({
           </Card>
         </div>
 
-        <Card className="border-0 bg-white text-court-ink ring-0 lg:col-span-2">
+        <Card className="border-0 bg-white text-court-ink ring-0 lg:col-span-2" id="honours-board-image">
           <CardHeader className="border-b border-black/5">
-            <CardTitle className="flex items-center gap-2 text-xl"><ImageIcon className="text-club-green" /> Image library</CardTitle>
-            <CardDescription>Upload a JPEG or PNG once, then show it immediately on the TV. An exact 3840×2160 image can also become the permanent honours-board source.</CardDescription>
+            <CardTitle className="flex items-center gap-2 text-xl"><ImageIcon className="text-club-green" /> Honours board image</CardTitle>
+            <CardDescription>To replace the honours board, upload an exact 3840×2160 JPEG or PNG, then choose <strong>Set as honours board</strong>. Other image sizes can still be shown temporarily.</CardDescription>
           </CardHeader>
           <CardContent className="space-y-5">
             <div className="flex flex-col gap-3 rounded-xl border border-dashed border-black/15 bg-stone-50 p-4 sm:flex-row sm:items-center sm:justify-between">
               <div>
-                <p className="flex items-center gap-2 font-bold"><Upload className="size-4 text-club-green" /> Add a display image</p>
+                <p className="flex items-center gap-2 font-bold"><Upload className="size-4 text-club-green" /> Upload a new image</p>
                 <p className="mt-1 text-xs text-court-ink/50">JPEG or PNG, up to 20 MB. Images are verified before they appear in this library.</p>
               </div>
               <Input
@@ -692,7 +705,7 @@ function ControlView({
                         </div>
                         <div className="grid grid-cols-2 gap-2">
                           <Button disabled={!authToken || adminBusy} onClick={() => onRemoteAction({ action: 'show_image', assetId: asset.assetId })} size="sm">Show now</Button>
-                          <Button disabled={!authToken || adminBusy || !isFourK} onClick={() => onRemoteAction({ action: 'set_honours_image', assetId: asset.assetId })} size="sm" variant="outline">Use as honours</Button>
+                          <Button disabled={!authToken || adminBusy || !isFourK} onClick={() => onRemoteAction({ action: 'set_honours_image', assetId: asset.assetId })} size="sm" variant="outline">Set as honours board</Button>
                         </div>
                         {!isFourK && <p className="text-[11px] leading-4 text-court-ink/40">Temporary display only. The honours source must be exactly 3840×2160.</p>}
                       </div>

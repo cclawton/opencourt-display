@@ -44,7 +44,7 @@ The initial configuration selects the bundled image and verifies it is 3840×216
 
 Increase `revision` whenever the selected source should reload. Chromium is restarted only for a changed revision, a changed target or a browser failure. Invalid configuration leaves the current browser and its last-known-good content running.
 
-Google returned a 403 when a published presentation was placed inside an iframe under a local player. The supervisor therefore opens Slides directly as Chromium's top-level page, which is also how the legacy kiosk operated. Local images continue through `player.html` so their expected pixel dimensions are checked before display.
+Google returned a 403 when a published presentation was placed inside an iframe under a local player. The supervisor therefore opens Slides directly as Chromium's top-level page, which is also how the legacy kiosk operated. It uses Google's minimal presentation mode (`rm=minimal`) to suppress the navigation controls while preserving automatic advance and looping. Local images continue through `player.html` so their expected pixel dimensions are checked before display.
 
 Remote JPEG/PNG sources from the control-room image library are downloaded over HTTPS into `/var/lib/opencourt/assets`. The player verifies the MIME type, 20 MB size limit, encoded pixel dimensions and SHA-256 checksum before an atomic cache replacement. If download or verification fails, the active Chromium page and last-known-good local image remain unchanged.
 

@@ -146,10 +146,10 @@ def google_slides_url(value: str) -> str:
             raise ConfigError("published presentation ID is missing")
         path = f"/presentation/d/e/{parts[3]}/embed"
     else:
-        path = f"/presentation/d/{parts[2]}/present"
+        path = f"/presentation/d/{parts[2]}/preview"
 
     query = dict(parse_qsl(parsed.query, keep_blank_values=True))
-    query.update({"start": "true", "loop": "true", "delayms": "10000"})
+    query.update({"start": "true", "loop": "true", "delayms": "10000", "rm": "minimal"})
     return urlunparse(("https", "docs.google.com", path, "", urlencode(query), ""))
 
 
