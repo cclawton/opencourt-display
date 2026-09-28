@@ -1,5 +1,6 @@
 import { DynamoDBClient } from '@aws-sdk/client-dynamodb';
 import {
+  DeleteCommand,
   GetCommand,
   PutCommand,
   ScanCommand,
@@ -17,6 +18,7 @@ const googleClient = new OAuth2Client();
 const DEVICE_ID_PATTERN = /^[a-z0-9][a-z0-9-]{1,62}$/;
 const PROGRAMME_ID_PATTERN = /^[a-z0-9][a-z0-9-]{1,62}$/;
 const ASSET_ID_PATTERN = /^[a-f0-9-]{36}$/;
+const CONTENT_ID_PATTERN = /^[a-z0-9][a-z0-9-]{1,62}$/;
 const IMAGE_MIME_TYPES = new Map([['image/jpeg', 'jpg'], ['image/png', 'png']]);
 const MAX_IMAGE_BYTES = 20 * 1024 * 1024;
 const MAX_BODY_BYTES = 8 * 1024;
@@ -75,6 +77,14 @@ function assetIdFromCompletePath(rawPath = '') {
   return decodePathId(rawPath, /^\/admin\/assets\/([^/]+)\/complete$/, ASSET_ID_PATTERN);
 }
 
+function contentIdFromPath(rawPath = '') {
+  return decodePathId(rawPath, /^\/admin\/content\/([^/]+)$/, CONTENT_ID_PATTERN);
+}
+
+function contentIdFromCompletePath(rawPath = '') {
+  return decodePathId(rawPath, /^\/admin\/content\/([^/]+)\/complete$/, CONTENT_ID_PATTERN);
+}
+
 function publicConfig(item) {
   return {
     schemaVersion: item.schemaVersion,
@@ -123,6 +133,23 @@ function publicAsset(item) {
   };
 }
 
+function publicContent(item) {
+  return {
+    contentId: item.contentId,
+    title: item.title,
+    type: item.type,
+    provider: item.provider,
+    status: item.status,
+    source: item.source ?? null,
+    mimeType: item.mimeType ?? null,
+    byteSize: item.byteSize ?? null,
+    width: item.width ?? null,
+    height: item.height ?? null,
+    createdAt: item.createdAt,
+    updatedAt: item.updatedAt,
+  };
+}
+
 function parseBody(event) {
   if (!event?.body || Buffer.byteLength(event.body, 'utf8') > MAX_BODY_BYTES) {
     throw new HttpError(400, 'invalid_request_body');
@@ -165,7 +192,7 @@ function validateSource(source) {
 }
 
 function validateUploadRequest(value) {
-  const name = typeof value.name === 'string' ? value.name.trim() : '';
+  const name = typeof value.title === 'string' ? value.title.trim() : typeof value.name === 'string' ? value.name.trim() : '';
   const mimeType = typeof value.mimeType === 'string' ? value.mimeType.toLowerCase() : '';
   const byteSize = Number(value.byteSize);
   const width = Number(value.width);
@@ -179,6 +206,40 @@ function validateUploadRequest(value) {
   }
   if (!/^[a-f0-9]{64}$/.test(sha256)) throw new HttpError(400, 'invalid_image_checksum');
   return { name, mimeType, byteSize, width, height, sha256 };
+}
+
+function validateTitle(value) {
+  const title = typeof value === 'string' ? value.trim() : '';
+  if (title.length < 2 || title.length > 100) throw new HttpError(400, 'invalid_content_title');
+  return title;
+}
+
+function normaliseSlidesSource(value) {
+  const rawUrl = typeof value === 'string' ? value.trim() : '';
+  let url;
+  try {
+    url = new URL(rawUrl);
+  } catch {
+    throw new HttpError(400, 'invalid_google_slides_url');
+  }
+  const parts = url.pathname.split('/').filter(Boolean);
+  if (url.protocol !== 'https:' || url.hostname !== 'docs.google.com' || parts[0] !== 'presentation' || parts[1] !== 'd') {
+    throw new HttpError(400, 'invalid_google_slides_url');
+  }
+  if (parts[2] === 'e' && parts[3]) url.pathname = `/presentation/d/e/${parts[3]}/pub`;
+  else if (parts[2]) url.pathname = `/presentation/d/${parts[2]}/preview`;
+  else throw new HttpError(400, 'invalid_google_slides_url');
+  url.search = '';
+  url.searchParams.set('start', 'true');
+  url.searchParams.set('loop', 'true');
+  url.searchParams.set('delayms', '10000');
+  url.searchParams.set('rm', 'minimal');
+  return validateSource({ type: 'google_slides', url: url.toString() });
+}
+
+function validateContent(item) {
+  if (!item || item.status !== 'ready' || !['slideshow', 'image'].includes(item.type)) throw new HttpError(404, 'content_not_found');
+  return validateSource(item.source);
 }
 
 function imageSource(asset) {
@@ -205,14 +266,17 @@ function selectProgramme(programme) {
   return validateSource(programme.source);
 }
 
-function buildChange(current, action, programme, asset, actor, now) {
+function buildChange(current, action, programme, asset, content, actor, now) {
   if (!current) throw new HttpError(404, 'device_not_found');
   const revision = current.revision + 1;
   let source = current.source;
   let activeSelection = current.activeSelection ?? { kind: 'unknown' };
   let override = null;
 
-  if (action.action === 'show_programme') {
+  if (action.action === 'show_content') {
+    source = validateContent(content);
+    activeSelection = { kind: 'content', contentId: content.contentId, contentType: content.type, name: content.title };
+  } else if (action.action === 'show_programme') {
     source = selectProgramme(programme);
     activeSelection = { kind: 'programme', programmeId: programme.programmeId, name: programme.name };
   } else if (action.action === 'show_honours') {
@@ -263,10 +327,16 @@ export function createHandler({
   completeAsset,
   createUploadUrl,
   headAsset,
+  getContent,
+  listContent,
+  putContent,
+  deleteContent,
+  listDevices,
   updateDevice,
   verifyToken,
   now = () => new Date().toISOString(),
   newAssetId = randomUUID,
+  newContentId = randomUUID,
 }) {
   return async function handle(event) {
     try {
@@ -298,6 +368,135 @@ export function createHandler({
         return response(200, {
           assets: items.filter((item) => item.status === 'ready').sort((a, b) => String(b.createdAt).localeCompare(String(a.createdAt))).map(publicAsset),
         });
+      }
+
+      if (method === 'GET' && rawPath === '/admin/content') {
+        const items = await listContent();
+        return response(200, {
+          content: items
+            .filter((item) => item.status === 'ready' || item.source)
+            .sort((a, b) => String(a.title).localeCompare(String(b.title)))
+            .map(publicContent),
+        });
+      }
+
+      if (method === 'POST' && rawPath === '/admin/content') {
+        const body = parseBody(event);
+        if (body.type !== 'slideshow') throw new HttpError(400, 'unsupported_content_type');
+        const timestamp = now();
+        const content = {
+          contentId: newContentId(),
+          title: validateTitle(body.title),
+          type: 'slideshow',
+          provider: 'google_slides',
+          status: 'ready',
+          source: normaliseSlidesSource(body.url),
+          createdAt: timestamp,
+          createdBy: actor.email,
+          updatedAt: timestamp,
+          updatedBy: actor.email,
+        };
+        await putContent(content, true);
+        return response(201, { content: publicContent(content) });
+      }
+
+      if (method === 'POST' && rawPath === '/admin/content/images/uploads') {
+        const body = parseBody(event);
+        const upload = validateUploadRequest(body);
+        const replacingId = typeof body.contentId === 'string' ? body.contentId : '';
+        if (replacingId && !CONTENT_ID_PATTERN.test(replacingId)) throw new HttpError(400, 'invalid_content_id');
+        const current = replacingId ? await getContent(replacingId) : undefined;
+        if (replacingId && (!current || current.type !== 'image')) throw new HttpError(404, 'content_not_found');
+        const contentId = current?.contentId ?? newContentId();
+        const uploadId = newAssetId();
+        const extension = IMAGE_MIME_TYPES.get(upload.mimeType);
+        const objectKey = `display-assets/${contentId}/${uploadId}.${extension}`;
+        const timestamp = now();
+        const pendingUpload = {
+          ...upload,
+          checksumBase64: Buffer.from(upload.sha256, 'hex').toString('base64'),
+          objectKey,
+          publicUrl: `${process.env.ASSET_PUBLIC_BASE_URL}/${objectKey}`,
+        };
+        const content = {
+          ...current,
+          contentId,
+          title: upload.name,
+          type: 'image',
+          provider: 'uploaded_image',
+          status: current?.source ? 'ready' : 'pending',
+          pendingUpload,
+          createdAt: current?.createdAt ?? timestamp,
+          createdBy: current?.createdBy ?? actor.email,
+          updatedAt: timestamp,
+          updatedBy: actor.email,
+        };
+        await putContent(content, !current);
+        const uploadUrl = await createUploadUrl(pendingUpload);
+        return response(201, {
+          content: publicContent(content),
+          uploadUrl,
+          uploadHeaders: { 'content-type': upload.mimeType, 'x-amz-checksum-sha256': pendingUpload.checksumBase64 },
+          expiresInSeconds: 300,
+        });
+      }
+
+      const completeContentId = contentIdFromCompletePath(rawPath);
+      if (method === 'POST' && completeContentId) {
+        const content = await getContent(completeContentId);
+        if (!content?.pendingUpload) return response(404, { error: 'pending_upload_not_found' });
+        const stored = await headAsset(content.pendingUpload);
+        if (stored.byteSize !== content.pendingUpload.byteSize || stored.mimeType !== content.pendingUpload.mimeType || stored.checksumBase64 !== content.pendingUpload.checksumBase64) {
+          throw new HttpError(409, 'uploaded_image_does_not_match');
+        }
+        const upload = content.pendingUpload;
+        const readyContent = {
+          ...content,
+          status: 'ready',
+          source: validateSource({
+            type: 'image',
+            url: upload.publicUrl,
+            mimeType: upload.mimeType,
+            expectedWidth: upload.width,
+            expectedHeight: upload.height,
+            sha256: upload.sha256,
+          }),
+          mimeType: upload.mimeType,
+          byteSize: upload.byteSize,
+          width: upload.width,
+          height: upload.height,
+          sha256: upload.sha256,
+          objectKey: upload.objectKey,
+          verifiedAt: now(),
+        };
+        delete readyContent.pendingUpload;
+        await putContent(readyContent, false);
+        return response(200, { content: publicContent(readyContent) });
+      }
+
+      const adminContentId = contentIdFromPath(rawPath);
+      if (method === 'PUT' && adminContentId) {
+        const current = await getContent(adminContentId);
+        if (!current) return response(404, { error: 'content_not_found' });
+        const body = parseBody(event);
+        const updated = {
+          ...current,
+          title: validateTitle(body.title),
+          updatedAt: now(),
+          updatedBy: actor.email,
+        };
+        if (current.type === 'slideshow') updated.source = normaliseSlidesSource(body.url);
+        await putContent(updated, false);
+        return response(200, { content: publicContent(updated) });
+      }
+
+      if (method === 'DELETE' && adminContentId) {
+        const [current, devices] = await Promise.all([getContent(adminContentId), listDevices()]);
+        if (!current) return response(404, { error: 'content_not_found' });
+        const inUse = devices.some((device) => device.activeSelection?.contentId === adminContentId || device.source?.url === current.source?.url);
+        if (inUse) throw new HttpError(409, 'content_is_currently_on_a_display');
+        await deleteContent(adminContentId);
+        return response(200, { deleted: true });
       }
 
       if (method === 'POST' && rawPath === '/admin/assets/uploads') {
@@ -350,21 +549,24 @@ export function createHandler({
       const actionDeviceId = deviceIdFromActionPath(rawPath);
       if (method === 'POST' && actionDeviceId) {
         const action = parseBody(event);
+        const needsContent = action.action === 'show_content';
         const needsProgramme = ['show_programme', 'set_event_override'].includes(action.action);
         const needsAsset = ['show_image', 'set_honours_image'].includes(action.action);
         if (needsProgramme && !PROGRAMME_ID_PATTERN.test(action.programmeId ?? '')) throw new HttpError(400, 'invalid_programme_id');
         if (needsAsset && !ASSET_ID_PATTERN.test(action.assetId ?? '')) throw new HttpError(400, 'invalid_asset_id');
-        const [current, programme, asset] = await Promise.all([
+        if (needsContent && !CONTENT_ID_PATTERN.test(action.contentId ?? '')) throw new HttpError(400, 'invalid_content_id');
+        const [current, programme, asset, content] = await Promise.all([
           getDevice(actionDeviceId),
           needsProgramme ? getProgramme(action.programmeId) : Promise.resolve(undefined),
           needsAsset ? getAsset(action.assetId) : Promise.resolve(undefined),
+          needsContent ? getContent(action.contentId) : Promise.resolve(undefined),
         ]);
-        const change = buildChange(current, action, programme, asset, actor, now());
+        const change = buildChange(current, action, programme, asset, content, actor, now());
         await updateDevice({ previousRevision: current.revision, ...change });
         return response(200, { device: adminDevice(change.item) });
       }
 
-      if (!['GET', 'POST'].includes(method)) return response(405, { error: 'method_not_allowed' }, { allow: 'GET, POST' });
+      if (!['GET', 'POST', 'PUT', 'DELETE'].includes(method)) return response(405, { error: 'method_not_allowed' }, { allow: 'GET, POST, PUT, DELETE' });
       return response(404, { error: 'not_found' });
     } catch (error) {
       if (error instanceof HttpError) return response(error.statusCode, { error: error.message });
@@ -436,6 +638,28 @@ export const handler = createHandler({
   async headAsset(asset) {
     const result = await s3Client.send(new HeadObjectCommand({ Bucket: process.env.ASSET_BUCKET, Key: asset.objectKey, ChecksumMode: 'ENABLED' }));
     return { byteSize: result.ContentLength, mimeType: result.ContentType, checksumBase64: result.ChecksumSHA256 };
+  },
+  async getContent(contentId) {
+    const result = await documentClient.send(new GetCommand({ TableName: process.env.CONTENT_TABLE, Key: { contentId }, ConsistentRead: false }));
+    return result.Item;
+  },
+  async listContent() {
+    const result = await documentClient.send(new ScanCommand({ TableName: process.env.CONTENT_TABLE, Limit: 200 }));
+    return result.Items ?? [];
+  },
+  async putContent(content, createOnly) {
+    await documentClient.send(new PutCommand({
+      TableName: process.env.CONTENT_TABLE,
+      Item: content,
+      ...(createOnly ? { ConditionExpression: 'attribute_not_exists(contentId)' } : {}),
+    }));
+  },
+  async deleteContent(contentId) {
+    await documentClient.send(new DeleteCommand({ TableName: process.env.CONTENT_TABLE, Key: { contentId } }));
+  },
+  async listDevices() {
+    const result = await documentClient.send(new ScanCommand({ TableName: process.env.DEVICE_CONFIG_TABLE, Limit: 100 }));
+    return result.Items ?? [];
   },
   async updateDevice({ previousRevision, item, audit }) {
     await documentClient.send(new TransactWriteCommand({

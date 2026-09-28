@@ -7,6 +7,7 @@
     "build": "tsc",
     "seed": "node scripts/put-device-config.mjs",
     "seed-programmes": "node scripts/put-programmes.mjs",
+    "migrate-content": "node scripts/migrate-content.mjs",
     "test": "npm run build --silent && node --test test/*.test.mjs",
     "synth": "cdk synth"
   },

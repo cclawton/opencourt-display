@@ -55,7 +55,7 @@ The suites must cover:
 7. Select **Show honours** and confirm the honours board becomes the current source.
 8. Select **Refresh TV now** and confirm one new revision is created without changing the source.
 9. Select **Restore default** and confirm the configured default source is restored.
-10. Create a temporary one-off event against a known programme, confirm its name and source, then restore the default.
+10. In Content, edit a slideshow title/URL, add an image, replace it, and delete an unused item. Confirm the currently displayed item cannot be deleted.
 11. Upload a non-sensitive JPEG or PNG test image, confirm it appears in the library, display it temporarily, then restore the default. Only exercise **Use as honours** with an approved 3840×2160 club image.
 12. Sign out and confirm the controls disappear.
 

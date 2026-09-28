@@ -10,7 +10,8 @@ The first stack contains:
 - Google ID-token protected committee routes for programme reads and display actions;
 - a private S3 bucket and CloudFront distribution for the static control room;
 - an authenticated image registry with short-lived, checksum-bound direct uploads to the same private bucket; and
-- a retained DynamoDB audit table for every authenticated display change.
+- a retained DynamoDB audit table for every authenticated display change; and
+- a retained generic content table that keeps slideshow and still-image definitions separate from device state.
 - ETag/`If-None-Match` support for one-minute Pi polling; and
 - an AWS Budget with actual-cost notifications at USD $1, $5 and $10, conservatively scoped to the Lambda, DynamoDB and CloudWatch service families used by the control plane.
 
@@ -18,14 +19,14 @@ The public device route is still read-only. Administrative writes require a Goog
 
 Admin routes are:
 
-- `GET /admin/programmes`
+- `GET /admin/content` to list ready slideshows and still images.
+- `POST /admin/content` and `PUT /admin/content/{contentId}` to create/edit Google Slides entries.
+- `POST /admin/content/images/uploads` and `POST /admin/content/{contentId}/complete` to create or replace verified JPEG/PNG entries.
+- `DELETE /admin/content/{contentId}` to delete unused content. The API refuses to delete the content currently shown on a display.
 - `GET /admin/devices/{deviceId}`
-- `GET /admin/assets`
-- `POST /admin/assets/uploads` to obtain a five-minute S3 upload URL for a JPEG/PNG up to 20 MB
-- `POST /admin/assets/{assetId}/complete` to verify the stored object's size, type and SHA-256 checksum
-- `POST /admin/devices/{deviceId}/actions` with `show_programme`, `show_honours`, `show_image`, `set_honours_image`, `return_to_schedule`, `refresh` or `set_event_override`.
+- `POST /admin/devices/{deviceId}/actions` with `show_content` or `refresh` for the current control room. Legacy programme/image actions remain during migration and rollback.
 
-`show_image` is a temporary selection and accepts any validated image dimensions. `set_honours_image` requires exactly 3840×2160 and updates the device's default source as well as its current source. S3 remains private and has no anonymous write path; the browser receives a signed URL for one specific object, checksum and content type. The displayed image URL is public through CloudFront because a clubhouse Pi must download it without storing committee credentials.
+S3 remains private and has no anonymous write path; the browser receives a signed URL for one specific object, checksum and content type. The displayed image URL is public through CloudFront because a clubhouse Pi must download it without storing committee credentials. Replacements use versioned object keys so an active display never loses its last-known-good image.
 
 ## Local verification
 
@@ -56,7 +57,7 @@ The initial service-family budget filter covers Lambda, DynamoDB, CloudWatch, S3
 
 The image feature adds no server or always-on process: it reuses the existing private S3 bucket, CloudFront distribution and on-demand Lambda. Its variable usage is limited to stored image bytes, upload/download requests, a small DynamoDB metadata item and CloudFront transfer. Pending uploads are never listed as selectable. CloudTrail S3 data events can be enabled later if the club needs object-level audit logs, but they are omitted from the tiny-club default to avoid unnecessary logging cost; display changes themselves remain in the retained audit table.
 
-The initial seed is a local administrative action, not a public API. Seed the device with `defaultSource` after deploying the updated stack, then seed the eight existing published programmes:
+The initial seed is a local administrative action, not a public API. After deploying the updated stack, migrate the retained device/programme/image records into the content table:
 
 ```bash
 npm run seed -- \
@@ -67,6 +68,13 @@ npm run seed -- \
 npm run seed-programmes -- \
   --table opencourt-heatherdale-pilot-programmes \
   --file ../.private-pi-audit/2026-09-27/programmes.json \
+  --region ap-southeast-2
+
+npm run migrate-content -- \
+  --device-table opencourt-heatherdale-pilot-device-configurations \
+  --programme-table opencourt-heatherdale-pilot-programmes \
+  --asset-table opencourt-heatherdale-pilot-display-assets \
+  --content-table opencourt-heatherdale-pilot-content-items \
   --region ap-southeast-2
 ```
 

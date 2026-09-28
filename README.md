@@ -10,8 +10,7 @@ The project began at Heatherdale Tennis Club in Melbourne, Australia, but club n
 - Eight example Heatherdale display programmes, including a Saturday afternoon allocation shared by Pennant and Seniors.
 - Google Slides URL configuration with a native slideshow preview.
 - Automatic two-minute refresh and a manual **Refresh TV now** control.
-- A one-off event override demonstration.
-- An authenticated JPEG/PNG image library with **Show now** and **Use as honours** controls.
+- An authenticated content library with simple slideshow and still-image controls.
 - Original-file checksum and dimension verification plus last-known-good image caching on each Pi.
 - A progressive web app shell for recovery after a brief network outage.
 - A reproducible Raspberry Pi 4/400 image definition based on Raspberry Pi's `rpi-image-gen` web-kiosk pattern.
@@ -27,7 +26,7 @@ npm install
 npm run dev
 ```
 
-Open the local URL printed by the development server. Use **TV display** to show the board, **Control room** to preview programmes and Google Slides, and **First boot** to walk through device setup.
+Open the local URL printed by the development server. Use **TV display** for the local demonstration, **Control room** to preview it, and **First boot** to walk through device setup. The deployed committee control room has two focused sections: **Displays** chooses content for a TV, and **Content** creates, edits, replaces or deletes slideshows and images.
 
 ## Build the web application
 
@@ -55,7 +54,7 @@ Administrative writes are disabled until the pilot stack is deployed with the cl
 
 ## Product model
 
-OpenCourt schedules **display programmes**, not competitions. A programme represents the complete court allocation for a time window and may contain multiple simultaneous activities. One-off events can replace or supplement the regular programme.
+OpenCourt stores **display content**, not competitions. A slideshow represents the complete court allocation for a time window and may contain multiple simultaneous activities. The current content types are Google Slides and still images; the content API deliberately keeps the type/provider boundary open for future channels.
 
 See [Architecture](docs/ARCHITECTURE.md), [MVP scope](docs/MVP.md) and [Backlog](BACKLOG.md).
 

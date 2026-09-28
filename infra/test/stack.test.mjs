@@ -27,4 +27,11 @@ test('control API can read and transactionally update the device configuration',
 
   const policies = template.findResources('AWS::IAM::Policy');
   assert.ok(Object.keys(policies).length > 0);
+
+  const tables = template.findResources('AWS::DynamoDB::Table');
+  assert.ok(Object.keys(tables).some((logicalId) => logicalId.startsWith('DeviceConfigurations')));
+  assert.ok(Object.keys(tables).some((logicalId) => logicalId.startsWith('Programmes')));
+  assert.ok(Object.keys(tables).some((logicalId) => logicalId.startsWith('DisplayAssets')));
+  assert.ok(Object.keys(tables).some((logicalId) => logicalId.startsWith('ContentItems')));
+  assert.equal(Object.keys(tables).length, 5);
 });

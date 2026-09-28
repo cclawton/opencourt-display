@@ -16,7 +16,7 @@ export type RemoteDevice = {
   revision: number;
   pollIntervalSeconds: number;
   source: { type: 'image' | 'google_slides'; url: string };
-  activeSelection: { kind: string; name?: string; programmeId?: string } | null;
+  activeSelection: { kind: string; name?: string; programmeId?: string; contentId?: string; contentType?: 'slideshow' | 'image' } | null;
   override: { name: string; programmeId: string; startedAt: string } | null;
   updatedAt: string | null;
   updatedBy: string | null;
@@ -34,6 +34,21 @@ export type RemoteAsset = {
   status: 'pending' | 'ready';
   createdAt: string;
   createdBy: string;
+};
+
+export type RemoteContent = {
+  contentId: string;
+  title: string;
+  type: 'slideshow' | 'image';
+  provider: string;
+  status: 'pending' | 'ready';
+  source: { type: 'image' | 'google_slides'; url: string } | null;
+  mimeType: 'image/jpeg' | 'image/png' | null;
+  byteSize: number | null;
+  width: number | null;
+  height: number | null;
+  createdAt: string;
+  updatedAt: string;
 };
 
 async function request<T>(config: RuntimeConfig, token: string, path: string, init: RequestInit = {}): Promise<T> {
@@ -59,6 +74,14 @@ export async function loadAdminState(config: RuntimeConfig, token: string) {
     request<{ assets: RemoteAsset[] }>(config, token, '/admin/assets'),
   ]);
   return { programmes: programmeResponse.programmes, device: deviceResponse.device, assets: assetResponse.assets };
+}
+
+export async function loadControlRoomState(config: RuntimeConfig, token: string) {
+  const [contentResponse, deviceResponse] = await Promise.all([
+    request<{ content: RemoteContent[] }>(config, token, '/admin/content'),
+    request<{ device: RemoteDevice }>(config, token, `/admin/devices/${encodeURIComponent(config.deviceId)}`),
+  ]);
+  return { content: contentResponse.content, device: deviceResponse.device };
 }
 
 export async function issueDeviceAction(config: RuntimeConfig, token: string, action: Record<string, unknown>) {
@@ -104,4 +127,64 @@ export async function uploadDisplayImage(
     body: JSON.stringify({}),
   });
   return completed.asset;
+}
+
+export async function createSlideshowContent(config: RuntimeConfig, token: string, title: string, url: string) {
+  const response = await request<{ content: RemoteContent }>(config, token, '/admin/content', {
+    method: 'POST',
+    body: JSON.stringify({ type: 'slideshow', title, url }),
+  });
+  return response.content;
+}
+
+export async function updateContent(config: RuntimeConfig, token: string, contentId: string, values: { title: string; url?: string }) {
+  const response = await request<{ content: RemoteContent }>(config, token, `/admin/content/${encodeURIComponent(contentId)}`, {
+    method: 'PUT',
+    body: JSON.stringify(values),
+  });
+  return response.content;
+}
+
+export async function deleteContent(config: RuntimeConfig, token: string, contentId: string) {
+  await request<{ deleted: true }>(config, token, `/admin/content/${encodeURIComponent(contentId)}`, { method: 'DELETE' });
+}
+
+export async function uploadContentImage(
+  config: RuntimeConfig,
+  token: string,
+  title: string,
+  file: File,
+  dimensions: { width: number; height: number },
+  contentId?: string,
+) {
+  const digest = new Uint8Array(await crypto.subtle.digest('SHA-256', await file.arrayBuffer()));
+  const sha256 = Array.from(digest, (value) => value.toString(16).padStart(2, '0')).join('');
+  const checksumBase64 = btoa(String.fromCharCode(...digest));
+  const created = await request<{ content: RemoteContent; uploadUrl: string; uploadHeaders: Record<string, string> }>(config, token, '/admin/content/images/uploads', {
+    method: 'POST',
+    body: JSON.stringify({
+      contentId,
+      title,
+      mimeType: file.type,
+      byteSize: file.size,
+      width: dimensions.width,
+      height: dimensions.height,
+      sha256,
+    }),
+  });
+  const uploadResponse = await fetch(created.uploadUrl, {
+    method: 'PUT',
+    body: file,
+    headers: {
+      ...created.uploadHeaders,
+      'content-type': file.type,
+      'x-amz-checksum-sha256': checksumBase64,
+    },
+  });
+  if (!uploadResponse.ok) throw new Error(`Image upload failed (${uploadResponse.status})`);
+  const completed = await request<{ content: RemoteContent }>(config, token, `/admin/content/${encodeURIComponent(created.content.contentId)}/complete`, {
+    method: 'POST',
+    body: JSON.stringify({}),
+  });
+  return completed.content;
 }

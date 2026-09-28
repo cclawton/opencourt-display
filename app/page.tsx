@@ -34,6 +34,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { GoogleSignIn, signOutGoogle } from '@/components/google-sign-in';
+import { DeployedControlRoom } from '@/components/deployed-control-room';
 import { issueDeviceAction, loadAdminState, uploadDisplayImage, type RemoteAsset, type RemoteDevice, type RemoteProgramme } from '@/lib/control-api';
 import { getRuntimeConfig } from '@/lib/runtime-config';
 
@@ -261,6 +262,8 @@ export default function Home() {
   function enterFullscreen() {
     void document.documentElement.requestFullscreen?.();
   }
+
+  if (deployedControlRoom) return <DeployedControlRoom config={runtimeConfig} />;
 
   return (
     <main className="min-h-screen bg-court-ink text-white">

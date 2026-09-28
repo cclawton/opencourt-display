@@ -114,6 +114,16 @@ export class OpenCourtControlStack extends cdk.Stack {
       encryption: dynamodb.TableEncryption.AWS_MANAGED,
     });
 
+    const contentTable = new dynamodb.Table(this, 'ContentItems', {
+      tableName: cdk.Fn.join('-', [resourcePrefix, 'content-items']),
+      partitionKey: { name: 'contentId', type: dynamodb.AttributeType.STRING },
+      billingMode: dynamodb.BillingMode.PAY_PER_REQUEST,
+      pointInTimeRecoverySpecification: { pointInTimeRecoveryEnabled: false },
+      deletionProtection: true,
+      removalPolicy: cdk.RemovalPolicy.RETAIN,
+      encryption: dynamodb.TableEncryption.AWS_MANAGED,
+    });
+
     const websiteBucket = new s3.Bucket(this, 'ControlRoomWebsite', {
       blockPublicAccess: s3.BlockPublicAccess.BLOCK_ALL,
       encryption: s3.BucketEncryption.S3_MANAGED,
@@ -150,6 +160,7 @@ export class OpenCourtControlStack extends cdk.Stack {
         PROGRAMME_TABLE: programmeTable.tableName,
         AUDIT_TABLE: auditTable.tableName,
         ASSET_TABLE: assetTable.tableName,
+        CONTENT_TABLE: contentTable.tableName,
         ASSET_BUCKET: websiteBucket.bucketName,
         GOOGLE_OAUTH_CLIENT_ID: googleOAuthClientId.valueAsString,
         COMMITTEE_ADMIN_EMAILS: committeeAdminEmails.valueAsString,
@@ -162,7 +173,7 @@ export class OpenCourtControlStack extends cdk.Stack {
     });
     controlApi.node.addDependency(table);
     controlApi.addToRolePolicy(new iam.PolicyStatement({
-      actions: ['dynamodb:GetItem', 'dynamodb:PutItem'],
+      actions: ['dynamodb:GetItem', 'dynamodb:PutItem', 'dynamodb:Scan'],
       resources: [table.tableArn],
     }));
     controlApi.addToRolePolicy(new iam.PolicyStatement({
@@ -173,6 +184,7 @@ export class OpenCourtControlStack extends cdk.Stack {
       actions: ['dynamodb:GetItem', 'dynamodb:PutItem', 'dynamodb:Scan'],
       resources: [assetTable.tableArn],
     }));
+    contentTable.grant(controlApi, 'dynamodb:GetItem', 'dynamodb:PutItem', 'dynamodb:DeleteItem', 'dynamodb:Scan');
     controlApi.addToRolePolicy(new iam.PolicyStatement({
       actions: ['s3:GetObject', 's3:PutObject'],
       resources: [websiteBucket.arnForObjects('display-assets/*')],
@@ -187,7 +199,7 @@ export class OpenCourtControlStack extends cdk.Stack {
       authType: lambda.FunctionUrlAuthType.NONE,
       cors: {
         allowedOrigins: ['*'],
-        allowedMethods: [lambda.HttpMethod.GET, lambda.HttpMethod.POST],
+        allowedMethods: [lambda.HttpMethod.GET, lambda.HttpMethod.POST, lambda.HttpMethod.PUT, lambda.HttpMethod.DELETE],
         allowedHeaders: ['if-none-match', 'authorization', 'content-type'],
         maxAge: cdk.Duration.hours(1),
       },
@@ -286,6 +298,7 @@ export class OpenCourtControlStack extends cdk.Stack {
     new cdk.CfnOutput(this, 'ProgrammeTableName', { value: programmeTable.tableName });
     new cdk.CfnOutput(this, 'AuditTableName', { value: auditTable.tableName });
     new cdk.CfnOutput(this, 'AssetTableName', { value: assetTable.tableName });
+    new cdk.CfnOutput(this, 'ContentTableName', { value: contentTable.tableName });
     new cdk.CfnOutput(this, 'WebsiteBucketName', { value: websiteBucket.bucketName });
     new cdk.CfnOutput(this, 'ControlRoomUrl', { value: `https://${distribution.distributionDomainName}` });
     new cdk.CfnOutput(this, 'ControlRoomDistributionId', { value: distribution.distributionId });

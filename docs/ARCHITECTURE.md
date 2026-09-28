@@ -16,7 +16,7 @@
 ```text
 Convenors -> Google Slides -> content provider -> last-known-good cache
                                              |
-Weekly programmes + one-off events -> scheduler -> player -> HDMI TV
+Content library -> selected display source -> player -> HDMI TV
                                              |
                                       local control room
 ```
@@ -63,7 +63,7 @@ A programme contains:
 - Optional activity labels.
 - Priority and collision behaviour.
 
-One-off events may either replace the regular programme or join its playlist. Higher priority wins when two replacement programmes overlap.
+The current control room deliberately has no scheduling or event-override UI. Date-specific events remain a backlog item; the committee first chooses a named content item for the display.
 
 ## Trust boundaries
 

@@ -4,7 +4,7 @@
 
 - Heatherdale's eight regular display programmes.
 - Multiple activities sharing a programme and courts.
-- One-off event overrides.
+- A small content library containing the club's existing Google Slides and still images.
 - Google Slides as the content source.
 - Native slideshow display for the first working installation.
 - Automatic refresh within two minutes and an immediate manual refresh.
@@ -22,7 +22,7 @@
 - An authorised administrator can request an immediate reload.
 - The correct display programme is selected from local time in `Australia/Melbourne`.
 - Saturday afternoon can present Pennant and Seniors in one combined allocation.
-- A one-off event can take priority over the recurring programme.
+- Committee members can choose one content item for each migrated display and request a refresh.
 - The player starts after boot without manual browser interaction.
 - A fresh image collects configuration without embedding club secrets.
 - Failure to retrieve or validate a remote image does not discard the last-known-good version.
