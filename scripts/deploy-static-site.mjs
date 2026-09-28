@@ -27,9 +27,10 @@ const runtimePath = 'dist/runtime-config.js';
 const previousRuntime = await readFile(runtimePath, 'utf8');
 await writeFile(runtimePath, `window.OPENCOURT_WEB_CONFIG = ${JSON.stringify({ apiBaseUrl, googleClientId, deviceId })};\n`);
 try {
-  execFileSync('aws', ['s3', 'sync', 'dist', `s3://${bucket}`, '--region', region, '--delete', '--exclude', 'index.html', '--exclude', 'runtime-config.js', '--cache-control', 'public,max-age=31536000,immutable'], { stdio: 'inherit' });
+  execFileSync('aws', ['s3', 'sync', 'dist', `s3://${bucket}`, '--region', region, '--delete', '--exclude', 'index.html', '--exclude', 'runtime-config.js', '--exclude', 'sw.js', '--cache-control', 'public,max-age=31536000,immutable'], { stdio: 'inherit' });
   execFileSync('aws', ['s3', 'cp', 'dist/index.html', `s3://${bucket}/index.html`, '--region', region, '--cache-control', 'no-cache,no-store,must-revalidate', '--content-type', 'text/html; charset=utf-8'], { stdio: 'inherit' });
   execFileSync('aws', ['s3', 'cp', runtimePath, `s3://${bucket}/runtime-config.js`, '--region', region, '--cache-control', 'no-cache,no-store,must-revalidate', '--content-type', 'application/javascript'], { stdio: 'inherit' });
+  execFileSync('aws', ['s3', 'cp', 'dist/sw.js', `s3://${bucket}/sw.js`, '--region', region, '--cache-control', 'no-cache,no-store,must-revalidate', '--content-type', 'application/javascript'], { stdio: 'inherit' });
   execFileSync('aws', ['cloudfront', 'create-invalidation', '--distribution-id', distributionId, '--paths', '/*'], { stdio: 'inherit' });
   process.stdout.write(`Published control room at ${output('ControlRoomUrl')}\n`);
 } finally {

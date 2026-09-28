@@ -32,7 +32,6 @@ function response(statusCode, body, headers = {}) {
   return {
     statusCode,
     headers: {
-      'access-control-allow-origin': '*',
       'cache-control': 'no-store',
       'content-type': 'application/json; charset=utf-8',
       'x-content-type-options': 'nosniff',

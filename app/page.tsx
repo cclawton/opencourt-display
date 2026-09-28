@@ -573,17 +573,31 @@ function ControlView({
           <CardContent className="grid gap-2 sm:grid-cols-2">
             {programmes.map((programme) => {
               const remoteProgramme = remoteProgrammes.find((item) => item.programmeId === programme.id);
+              const isShown = remoteDevice?.activeSelection?.programmeId === programme.id;
+              if (deployedControlRoom) {
+                return (
+                  <button
+                    className={`flex min-h-14 items-center justify-between gap-3 rounded-xl border px-4 py-3 text-left transition hover:border-club-green/50 hover:bg-green-50 disabled:cursor-wait disabled:opacity-60 ${isShown ? 'border-club-green bg-green-50' : 'border-black/8'}`}
+                    disabled={adminBusy}
+                    key={programme.id}
+                    onClick={() => onRemoteAction({ action: 'show_programme', programmeId: programme.id })}
+                  >
+                    <span className="font-bold">{programme.name}</span>
+                    {isShown ? <Badge className="shrink-0 bg-club-green text-white">On TV</Badge> : <span className="shrink-0 text-xs font-bold text-club-green">Show now</span>}
+                  </button>
+                );
+              }
               return (
                 <div className={`group flex items-center justify-between gap-2 rounded-xl border p-3 transition hover:border-club-green/40 hover:bg-green-50 ${programme.id === activeId ? 'border-club-green/40 bg-green-50' : 'border-black/8'}`} key={programme.id}>
-                  <button className="min-w-0 flex-1 text-left" disabled={deployedControlRoom} onClick={() => onPreview(programme.id)}>
+                  <button className="min-w-0 flex-1 text-left" onClick={() => onPreview(programme.id)}>
                     <div className="flex items-center gap-2">
                       <span className="font-bold">{programme.name}</span>
-                      {!deployedControlRoom && programme.id === activeId && <Badge className="bg-club-green text-white">Preview</Badge>}
+                      {programme.id === activeId && <Badge className="bg-club-green text-white">Preview</Badge>}
                     </div>
-                    {!deployedControlRoom && <p className="mt-1 text-xs text-court-ink/50">{programme.time} · {programme.activities.join(' + ')}</p>}
+                    <p className="mt-1 text-xs text-court-ink/50">{programme.time} · {programme.activities.join(' + ')}</p>
                   </button>
                   <div className="flex items-center gap-1">
-                    {!deployedControlRoom && <Eye className="hidden size-4 text-court-ink/25 transition group-hover:text-club-green sm:block" />}
+                    <Eye className="hidden size-4 text-court-ink/25 transition group-hover:text-club-green sm:block" />
                     {authToken && programmeIds.has(programme.id) && remoteProgramme && (
                       <Button disabled={adminBusy} onClick={() => onRemoteAction({ action: 'show_programme', programmeId: remoteProgramme.programmeId })} size="sm">Show now</Button>
                     )}

@@ -5,7 +5,7 @@ This package defines the deliberately small AWS control plane selected in [`docs
 The first stack contains:
 
 - a DynamoDB on-demand table keyed by `deviceId`;
-- a 128 MB ARM Lambda with reserved concurrency of two;
+- a 128 MB ARM Lambda with reserved concurrency of five;
 - an anonymous read-only Function URL at `/devices/{deviceId}/config`;
 - Google ID-token protected committee routes for programme reads and display actions;
 - a private S3 bucket and CloudFront distribution for the static control room;

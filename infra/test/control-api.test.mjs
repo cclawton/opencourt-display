@@ -73,6 +73,7 @@ test('returns only public device configuration with an ETag', async () => {
   const result = await createHandler(dependencies())(event('/devices/honours-board-tv/config'));
   assert.equal(result.statusCode, 200);
   assert.equal(result.headers.etag, '"honours-board-tv-7"');
+  assert.equal(result.headers['access-control-allow-origin'], undefined);
   assert.deepEqual(JSON.parse(result.body), { schemaVersion: 1, deviceId: 'honours-board-tv', revision: 7, pollIntervalSeconds: 60, source: item.source });
 });
 

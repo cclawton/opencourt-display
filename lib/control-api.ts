@@ -41,7 +41,12 @@ async function request<T>(config: RuntimeConfig, token: string, path: string, in
   const headers = new Headers(init.headers);
   headers.set('authorization', `Bearer ${token}`);
   if (init.body) headers.set('content-type', 'application/json');
-  const response = await fetch(`${config.apiBaseUrl}${path}`, { ...init, headers });
+  let response: Response;
+  try {
+    response = await fetch(`${config.apiBaseUrl}${path}`, { ...init, headers });
+  } catch {
+    throw new Error('The control service could not be reached. Reload this page and try again.');
+  }
   const body = await response.json().catch(() => ({}));
   if (!response.ok) throw new Error(body.error ?? `Request failed (${response.status})`);
   return body as T;
