@@ -46,7 +46,9 @@ npx cdk deploy \
   --parameters BillingAlertEmail=owner@example.com \
   --parameters ClubSlug=heatherdale \
   --parameters DeploymentStage=pilot \
-  --parameters DeploymentOwner=personal-pilot
+  --parameters DeploymentOwner=personal-pilot \
+  --parameters GoogleOAuthClientId=YOUR_WEB_CLIENT_ID \
+  --parameters CommitteeAdminEmails=committee@example.com
 ```
 
 Do not deploy until the target AWS account and region have been confirmed. After deployment, seed the table with an approved device configuration, test the read-only endpoint and only then place its HTTPS URL in the Pi's private `/var/lib/opencourt/remote.json` bootstrap file.
@@ -75,10 +77,11 @@ npm run migrate-content -- \
   --programme-table opencourt-heatherdale-pilot-programmes \
   --asset-table opencourt-heatherdale-pilot-display-assets \
   --content-table opencourt-heatherdale-pilot-content-items \
+  --device-id honours-board-tv \
   --region ap-southeast-2
 ```
 
-The command rejects unsafe provider URLs and uses a conditional write: only a strictly newer revision can replace an existing item.
+The migration seeds the eight existing Google Slides plus the local Honours Board image. It is safe to rerun: existing content IDs are skipped. The command rejects unsafe provider URLs and uses conditional writes so it does not overwrite committee edits.
 
 ## Static control-room deployment
 

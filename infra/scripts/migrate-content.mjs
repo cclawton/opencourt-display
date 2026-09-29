@@ -93,14 +93,22 @@ async function main() {
     })),
   ];
 
+  let migrated = 0;
+  let skipped = 0;
   for (const item of content) {
-    await client.send(new PutCommand({
-      TableName: contentTable,
-      Item: item,
-      ConditionExpression: 'attribute_not_exists(contentId)',
-    }));
+    try {
+      await client.send(new PutCommand({
+        TableName: contentTable,
+        Item: item,
+        ConditionExpression: 'attribute_not_exists(contentId)',
+      }));
+      migrated += 1;
+    } catch (error) {
+      if (error?.name !== 'ConditionalCheckFailedException') throw error;
+      skipped += 1;
+    }
   }
-  process.stdout.write(`Migrated ${content.length} content items.\n`);
+  process.stdout.write(`Migrated ${migrated} content items; skipped ${skipped} already present.\n`);
 }
 
 if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
