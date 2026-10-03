@@ -191,11 +191,15 @@ export const test = base.extend<{
           });
         }
         if (method === 'PUT' && url.pathname.endsWith('/schedule')) {
+          const targetDeviceId = decodeURIComponent(
+            url.pathname.split('/').at(-2)!,
+          );
           const fallback = content.find(
             (item) => item.contentId === body.fallbackContentId,
           )!;
-          device = {
+          const updatedDevice: typeof device = {
             ...device,
+            deviceId: targetDeviceId,
             revision: device.revision + 1,
             schedule: {
               timezone: 'Australia/Melbourne',
@@ -213,7 +217,8 @@ export const test = base.extend<{
               ),
             },
           };
-          return route.fulfill({ json: { device } });
+          if (targetDeviceId === 'honours-board-tv') device = updatedDevice;
+          return route.fulfill({ json: { device: updatedDevice } });
         }
         if (method === 'POST' && url.pathname.endsWith('/actions')) {
           if (body.action === 'show_content') {

@@ -178,7 +178,10 @@ export function DeployedControlRoom({ config }: { config: RuntimeConfig }) {
         setActor(state.actor);
         if (state.actor.role === 'admin')
           setConvenors(await listConvenors(config, credential));
-        else setSection('displays');
+        else
+          setSection((current) =>
+            current === 'content' || current === 'users' ? 'displays' : current,
+          );
         setScheduleEntries(
           loadedDevice.schedule?.entries.map(
             ({ day, startTime, endTime, contentId }) => ({
@@ -975,15 +978,41 @@ export function DeployedControlRoom({ config }: { config: RuntimeConfig }) {
           </div>
         ) : section === 'schedule' ? (
           <div className="space-y-5">
-            <div>
-              <h1 className="font-display text-2xl font-black">Schedule</h1>
-              <p className="text-sm text-court-ink/55">
-                Choose what the TV shows each week. Times use
-                Australia/Melbourne local time.
-              </p>
+            <div className="flex flex-col justify-between gap-3 sm:flex-row sm:items-end">
+              <div>
+                <h1 className="font-display text-2xl font-black">Schedule</h1>
+                <p className="text-sm text-court-ink/55">
+                  Each TV has its own schedule. Times use Australia/Melbourne
+                  local time.
+                </p>
+              </div>
+              <div className="w-full space-y-2 sm:w-72">
+                <Label htmlFor="schedule-device">Schedule for</Label>
+                <select
+                  className="h-11 w-full rounded-lg border border-black/15 bg-white px-3 text-sm font-bold"
+                  disabled={busy}
+                  id="schedule-device"
+                  onChange={(event) => {
+                    const next = devices.find(
+                      (item) => item.deviceId === event.target.value,
+                    );
+                    if (next) selectDevice(next);
+                  }}
+                  value={device?.deviceId ?? ''}
+                >
+                  {devices.map((item) => (
+                    <option key={item.deviceId} value={item.deviceId}>
+                      {deviceName(item)}
+                    </option>
+                  ))}
+                </select>
+              </div>
             </div>
             <Card className="border-0 bg-white ring-0">
               <CardContent className="space-y-4 pt-6">
+                <p className="font-bold text-club-green">
+                  Editing {device ? deviceName(device) : 'TV'} schedule
+                </p>
                 <div className="space-y-2">
                   <Label htmlFor="schedule-fallback">All other times</Label>
                   <select
@@ -1104,20 +1133,25 @@ export function DeployedControlRoom({ config }: { config: RuntimeConfig }) {
                   <Button
                     className="bg-club-green text-white hover:bg-club-green/90"
                     disabled={busy || !scheduleFallbackId}
-                    onClick={() =>
-                      run(async () => {
-                        const updated = await updateDeviceSchedule(
-                          config,
-                          token,
-                          device?.deviceId ?? config.deviceId,
-                          {
-                            fallbackContentId: scheduleFallbackId,
-                            entries: scheduleEntries,
-                          },
-                        );
-                        setDevice(updated);
-                      }, 'Schedule saved. Choose Schedule on Displays to use it.')
-                    }
+                    onClick={() => {
+                      if (!device) return;
+                      const scheduleDevice = device;
+                      void run(
+                        async () => {
+                          const updated = await updateDeviceSchedule(
+                            config,
+                            token,
+                            scheduleDevice.deviceId,
+                            {
+                              fallbackContentId: scheduleFallbackId,
+                              entries: scheduleEntries,
+                            },
+                          );
+                          setDevice(updated);
+                        },
+                        `${deviceName(scheduleDevice)} schedule saved. Choose Schedule on Displays to use it.`,
+                      );
+                    }}
                   >
                     <CalendarDays /> Save schedule
                   </Button>

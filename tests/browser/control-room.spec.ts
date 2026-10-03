@@ -27,12 +27,20 @@ test.describe('convenor navigation', () => {
     await navigation
       .getByRole('button', { name: 'Schedule', exact: true })
       .click();
+    await expect(page.getByLabel('Schedule for')).toHaveValue(
+      'honours-board-tv',
+    );
+    await expect(page.getByText('Editing Bar Room TV schedule')).toBeVisible();
+    await page.getByLabel('Schedule for').selectOption('opencourt-kitchen');
+    await expect(page.getByText('Editing Kitchen TV schedule')).toBeVisible();
     await page.getByRole('button', { name: 'Add time' }).click();
     await page.getByRole('button', { name: 'Save schedule' }).click();
-    await expect(page.getByRole('status')).toContainText('Schedule saved.');
+    await expect(page.getByRole('status')).toContainText(
+      'Kitchen TV schedule saved.',
+    );
     expect(room.writes.at(-1)).toMatchObject({
       method: 'PUT',
-      path: '/admin/devices/honours-board-tv/schedule',
+      path: '/admin/devices/opencourt-kitchen/schedule',
     });
     await navigation
       .getByRole('button', { name: 'Displays', exact: true })
@@ -229,7 +237,9 @@ test('saves weekly scheduling then enables it from the display dropdown', async 
   await page.getByLabel('Schedule end 1').fill('23:59');
   await page.getByLabel('Schedule content 1').selectOption('fixture-2');
   await page.getByRole('button', { name: 'Save schedule' }).click();
-  await expect(page.getByRole('status')).toContainText('Schedule saved.');
+  await expect(page.getByRole('status')).toContainText(
+    'Bar Room TV schedule saved.',
+  );
   await page.clock.setFixedTime(new Date('2026-10-05T07:00:00.000Z'));
   await page.getByRole('button', { name: 'Displays', exact: true }).click();
   await page.getByLabel('Choose what to show').selectOption('__schedule__');

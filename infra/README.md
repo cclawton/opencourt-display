@@ -118,7 +118,7 @@ The script reads the stack outputs, writes a temporary runtime configuration, up
 
 ## Weekly display schedule
 
-The control room can store a weekly schedule per display. It has an `Australia/Melbourne` timezone, an all-other-times fallback item, and non-overlapping day/time entries. The Pi evaluates the downloaded schedule locally on its regular poll loop, so a downloaded timetable continues to switch content during a cloud outage.
+The control room stores an independent weekly schedule for each display. The Schedule tab names the schedule currently being edited and lets the user switch TVs without returning to Displays. Each schedule has an `Australia/Melbourne` timezone, an all-other-times fallback item, and non-overlapping day/time entries. The Pi evaluates its downloaded schedule locally on its regular poll loop, so a downloaded timetable continues to switch content during a cloud outage.
 
 After deployment, seed the retained legacy timetable only after confirming the nine content titles are present. It uses **Honours Board** as the fallback and activates schedule mode:
 
