@@ -72,4 +72,31 @@ test('control API can read and transactionally update the device configuration',
     RefreshTokenValidity: 90,
   });
   template.resourceCountIs('AWS::SES::EmailIdentity', 3);
+  template.hasResourceProperties('AWS::Logs::LogGroup', {
+    RetentionInDays: 14,
+  });
+  template.hasResourceProperties('AWS::Lambda::Function', {
+    LoggingConfig: {
+      ApplicationLogLevel: 'ERROR',
+      LogFormat: 'JSON',
+      SystemLogLevel: 'WARN',
+    },
+    ReservedConcurrentExecutions: 10,
+  });
+  template.hasResourceProperties('AWS::CloudWatch::Dashboard', {
+    DashboardName: Match.anyValue(),
+    DashboardBody: Match.anyValue(),
+  });
+  const dashboard = JSON.stringify(
+    template.findResources('AWS::CloudWatch::Dashboard'),
+  );
+  for (const metric of [
+    'Invocations',
+    'Errors',
+    'Throttles',
+    'Duration',
+    'ConcurrentExecutions',
+  ]) {
+    assert.match(dashboard, new RegExp(metric));
+  }
 });

@@ -4,6 +4,7 @@ import * as budgets from 'aws-cdk-lib/aws-budgets';
 import * as cdk from 'aws-cdk-lib';
 import * as cloudfront from 'aws-cdk-lib/aws-cloudfront';
 import * as cloudfrontOrigins from 'aws-cdk-lib/aws-cloudfront-origins';
+import * as cloudwatch from 'aws-cdk-lib/aws-cloudwatch';
 import * as cognito from 'aws-cdk-lib/aws-cognito';
 import * as dynamodb from 'aws-cdk-lib/aws-dynamodb';
 import * as iam from 'aws-cdk-lib/aws-iam';
@@ -335,7 +336,7 @@ export class OpenCourtControlStack extends cdk.Stack {
     const functionName = cdk.Fn.join('-', [resourcePrefix, 'control-api']);
     new logs.LogGroup(this, 'ControlApiLogs', {
       logGroupName: `/aws/lambda/${functionName}`,
-      retention: logs.RetentionDays.ONE_WEEK,
+      retention: logs.RetentionDays.TWO_WEEKS,
       removalPolicy: cdk.RemovalPolicy.DESTROY,
     });
 
@@ -348,6 +349,9 @@ export class OpenCourtControlStack extends cdk.Stack {
       memorySize: 128,
       timeout: cdk.Duration.seconds(5),
       reservedConcurrentExecutions: 10,
+      loggingFormat: lambda.LoggingFormat.JSON,
+      applicationLogLevelV2: lambda.ApplicationLogLevel.ERROR,
+      systemLogLevelV2: lambda.SystemLogLevel.WARN,
       environment: {
         DEVICE_CONFIG_TABLE: table.tableName,
         PROGRAMME_TABLE: programmeTable.tableName,
@@ -515,6 +519,61 @@ export class OpenCourtControlStack extends cdk.Stack {
       `https://${distribution.distributionDomainName}`,
     );
 
+    const operationsDashboard = new cloudwatch.Dashboard(
+      this,
+      'OperationsDashboard',
+      {
+        dashboardName: cdk.Fn.join('-', [resourcePrefix, 'operations']),
+        defaultInterval: cdk.Duration.days(14),
+      },
+    );
+    operationsDashboard.addWidgets(
+      new cloudwatch.TextWidget({
+        width: 24,
+        height: 3,
+        markdown:
+          '# OpenCourt pilot health\nReview the last connection and diagnostics for each TV in the control room. This dashboard uses standard Lambda metrics; application logs contain unexpected errors only and expire after 14 days.',
+      }),
+      new cloudwatch.GraphWidget({
+        title: 'API requests, errors and throttles',
+        width: 12,
+        height: 6,
+        left: [
+          controlApi.metricInvocations({
+            period: cdk.Duration.hours(1),
+            statistic: cloudwatch.Stats.SUM,
+          }),
+        ],
+        right: [
+          controlApi.metricErrors({
+            period: cdk.Duration.hours(1),
+            statistic: cloudwatch.Stats.SUM,
+          }),
+          controlApi.metricThrottles({
+            period: cdk.Duration.hours(1),
+            statistic: cloudwatch.Stats.SUM,
+          }),
+        ],
+      }),
+      new cloudwatch.GraphWidget({
+        title: 'API duration and concurrency',
+        width: 12,
+        height: 6,
+        left: [
+          controlApi.metricDuration({
+            period: cdk.Duration.hours(1),
+            statistic: cloudwatch.Stats.percentile(95),
+          }),
+        ],
+        right: [
+          controlApi.metric('ConcurrentExecutions', {
+            period: cdk.Duration.hours(1),
+            statistic: cloudwatch.Stats.MAXIMUM,
+          }),
+        ],
+      }),
+    );
+
     new budgets.CfnBudget(this, 'MonthlyCostGuardrail', {
       budget: {
         budgetName: cdk.Fn.join('-', [
@@ -594,6 +653,9 @@ export class OpenCourtControlStack extends cdk.Stack {
     });
     new cdk.CfnOutput(this, 'ControlRoomDistributionId', {
       value: distribution.distributionId,
+    });
+    new cdk.CfnOutput(this, 'OperationsDashboardName', {
+      value: operationsDashboard.dashboardName,
     });
     new cdk.CfnOutput(this, 'ConvenorUserPoolId', {
       value: convenorPool.ref,

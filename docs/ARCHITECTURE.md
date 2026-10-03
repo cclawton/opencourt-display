@@ -40,7 +40,7 @@ AWS serverless is the selected production platform. The browser application will
 
 The existing `vinext`/Wrangler build is a local prototype dependency and will be replaced before production deployment. The Raspberry Pi player and its provider interfaces remain hosting-neutral.
 
-The AWS control plane is implemented in `infra/`: on-demand DynamoDB tables and a 128 MB ARM Lambda Function URL expose a whitelisted public device configuration plus authenticated control-room routes. Google Workspace administrators can manage displays, content, schedules and users; Cognito convenors can manage displays and schedules. Lambda reserved concurrency is capped at ten, logs expire after seven days, and the deployment requires actual-cost alerts at USD $1, $5 and $10. Reserved concurrency has no standing charge, and the public routes remain read-only except for authenticated device status reports.
+The AWS control plane is implemented in `infra/`: on-demand DynamoDB tables and a 128 MB ARM Lambda Function URL expose a whitelisted public device configuration plus authenticated control-room routes. Google Workspace administrators can manage displays, content, schedules and users; Cognito convenors can manage displays and schedules. Lambda reserved concurrency is capped at ten. JSON logs retain only application errors and system warnings for 14 days, while a CloudWatch dashboard graphs standard request, error, throttle, duration and concurrency metrics. The deployment requires actual-cost alerts at USD $1, $5 and $10. Reserved concurrency has no standing charge, and the public routes remain read-only except for authenticated device status reports.
 
 ### Raspberry Pi appliance
 

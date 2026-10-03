@@ -15,6 +15,7 @@ The first stack contains:
 - a retained DynamoDB audit table for every authenticated display change; and
 - a retained generic content table that keeps slideshow and still-image definitions separate from device state.
 - ETag/`If-None-Match` support for one-minute Pi polling; and
+- a 14-day CloudWatch operations dashboard using standard Lambda health metrics, with JSON logs limited to application errors and system warnings; and
 - an AWS Budget with actual-cost notifications at USD $1, $5 and $10, conservatively scoped to the Lambda, DynamoDB and CloudWatch service families used by the control plane.
 
 The public device route is still read-only. A Google Identity Services ID token for a committee administrator or a Cognito SMS/email OTP for a configured convenor establishes a 90-day control-room session. Identity credentials are verified server-side and never persisted. The browser stores only the random, revocable session token; the Pi stores no committee credential. Convenor sessions can read content and display state, show existing content, edit or restore schedules, and refresh a display. The API denies content-library and user-management writes for that role.
@@ -71,11 +72,13 @@ npx cdk deploy \
 
 Do not deploy until the target AWS account and region have been confirmed. After deployment, seed the table with an approved device configuration, test the read-only endpoint and only then place its HTTPS URL in the Pi's private `/var/lib/opencourt/remote.json` bootstrap file.
 
-The parameters keep resource names and ownership tags portable. The application stack has termination protection, the table is retained and deletion-protected, and the Lambda logs are intentionally short-lived. Bootstrap with termination protection as well. See [MIGRATION.md](MIGRATION.md) for the later move to a club-owned AWS account.
+The parameters keep resource names and ownership tags portable. The application stack has termination protection, the table is retained and deletion-protected, and the Lambda error logs expire after 14 days. Bootstrap with termination protection as well. See [MIGRATION.md](MIGRATION.md) for the later move to a club-owned AWS account and [`docs/OPERATIONS.md`](../docs/OPERATIONS.md) for pilot monitoring and review.
 
 The initial service-family budget filter covers Lambda, DynamoDB, CloudWatch, S3 and CloudFront. In a shared account it can still include another workload using one of those services. Activate the `Application` user-defined cost-allocation tag when it becomes available in Billing, then replace this transitional filter with `user:Application$OpenCourt Display`. AWS may take up to 24 hours to make a newly applied tag available for activation.
 
 Reserved Lambda concurrency is capped at ten. Reserved concurrency itself has no additional charge; OpenCourt continues to pay only for requests and execution duration actually consumed. The cap was raised from five after three synchronous requests were throttled during concurrent browser testing and a convenor login. The higher cap accommodates the two display devices, several users and release tests while retaining a conservative ceiling.
+
+The operations dashboard uses five standard Lambda metrics and adds no custom metrics or synthetic traffic. AWS currently includes three custom dashboards with up to 50 metrics each in the CloudWatch free tier. Routine successful polls are visible as aggregate invocations rather than log entries. Lambda platform logs below warning and application logs below error are suppressed, keeping the 14-day log group useful for investigation without recording every request.
 
 The image feature adds no server or always-on process: it reuses the existing private S3 bucket, CloudFront distribution and on-demand Lambda. Its variable usage is limited to stored image bytes, upload/download requests, a small DynamoDB metadata item and CloudFront transfer. Pending uploads are never listed as selectable. CloudTrail S3 data events can be enabled later if the club needs object-level audit logs, but they are omitted from the tiny-club default to avoid unnecessary logging cost; display changes themselves remain in the retained audit table.
 
