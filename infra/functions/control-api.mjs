@@ -56,6 +56,7 @@ const SESSION_DAYS = 90;
 const SESSION_PREFIX = 'ocs_';
 const MAX_CONVENORS = 5;
 const PHONE_PATTERN = /^\+[1-9]\d{7,14}$/;
+const EMAIL_PATTERN = /^[^@\s]+@[^@\s]+\.[^@\s]+$/;
 
 function sessionHash(token) {
   return createHash('sha256').update(token).digest('hex');
@@ -171,27 +172,39 @@ function convenorIdFromPath(rawPath = '') {
   );
 }
 
-function publicConvenor(item) {
+function publicConvenor(item, includeContacts = false) {
   const attributes = Object.fromEntries(
     (item.Attributes ?? []).map(({ Name, Value }) => [Name, Value]),
   );
-  return {
+  const result = {
     username: item.Username,
     name: attributes.name,
-    phoneNumber: attributes.phone_number,
+    deliveryMethods: [
+      ...(attributes.phone_number ? ['sms'] : []),
+      ...(attributes.email ? ['email'] : []),
+    ],
     enabled: item.Enabled !== false,
   };
+  if (includeContacts) {
+    result.phoneNumber = attributes.phone_number;
+    result.email = attributes.email;
+  }
+  return result;
 }
 
 function validateConvenor(body) {
   const name = typeof body?.name === 'string' ? body.name.trim() : '';
   const phoneNumber =
     typeof body?.phoneNumber === 'string' ? body.phoneNumber.trim() : '';
+  const email =
+    typeof body?.email === 'string' ? body.email.trim().toLowerCase() : '';
   if (name.length < 2 || name.length > 80)
     throw new HttpError(400, 'invalid_convenor_name');
   if (!PHONE_PATTERN.test(phoneNumber))
     throw new HttpError(400, 'invalid_phone_number');
-  return { name, phoneNumber };
+  if (email && !EMAIL_PATTERN.test(email))
+    throw new HttpError(400, 'invalid_email_address');
+  return { name, phoneNumber, email };
 }
 
 function publicConfig(item) {
@@ -685,7 +698,11 @@ export function createHandler({
           convenors: users
             .map(publicConvenor)
             .filter((user) => user.enabled && user.username && user.name)
-            .map(({ username, name }) => ({ username, name }))
+            .map(({ username, name, deliveryMethods }) => ({
+              username,
+              name,
+              deliveryMethods,
+            }))
             .sort((a, b) => a.name.localeCompare(b.name)),
         });
       }
@@ -741,7 +758,7 @@ export function createHandler({
         const users = await listConvenors();
         return response(200, {
           convenors: users
-            .map(publicConvenor)
+            .map((user) => publicConvenor(user, true))
             .filter((user) => user.username && user.name && user.phoneNumber)
             .sort((a, b) => a.name.localeCompare(b.name)),
         });
@@ -754,7 +771,7 @@ export function createHandler({
           throw new HttpError(409, 'convenor_limit_reached');
         const value = validateConvenor(parseBody(event));
         const user = await createConvenor(value);
-        return response(201, { convenor: publicConvenor(user) });
+        return response(201, { convenor: publicConvenor(user, true) });
       }
 
       const convenorId = convenorIdFromPath(rawPath);
@@ -1415,7 +1432,7 @@ export const handler = createHandler({
     );
     return result.Users ?? [];
   },
-  async createConvenor({ name, phoneNumber }) {
+  async createConvenor({ name, phoneNumber, email }) {
     const username = randomUUID();
     const created = await cognitoClient.send(
       new AdminCreateUserCommand({
@@ -1426,6 +1443,12 @@ export const handler = createHandler({
           { Name: 'name', Value: name },
           { Name: 'phone_number', Value: phoneNumber },
           { Name: 'phone_number_verified', Value: 'true' },
+          ...(email
+            ? [
+                { Name: 'email', Value: email },
+                { Name: 'email_verified', Value: 'true' },
+              ]
+            : []),
         ],
       }),
     );

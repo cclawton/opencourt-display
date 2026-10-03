@@ -186,7 +186,7 @@ test('saves weekly scheduling then enables it from the display dropdown', async 
     'returned to its schedule',
   );
   await expect(page.getByText('Currently showing:')).toContainText(
-    'Honours Board (Schedule)',
+    'Monday Night (Schedule)',
   );
   await page.getByRole('button', { name: 'Content', exact: true }).click();
   await expect(

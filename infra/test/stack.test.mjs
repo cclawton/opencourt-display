@@ -71,4 +71,5 @@ test('control API can read and transactionally update the device configuration',
     GenerateSecret: false,
     RefreshTokenValidity: 90,
   });
+  template.resourceCountIs('AWS::SES::EmailIdentity', 3);
 });

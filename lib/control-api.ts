@@ -104,6 +104,8 @@ export type Convenor = {
   username: string;
   name: string;
   phoneNumber?: string;
+  email?: string;
+  deliveryMethods?: ('sms' | 'email')[];
   enabled?: boolean;
 };
 
@@ -214,7 +216,7 @@ export async function listConvenors(config: RuntimeConfig, token: string) {
 export async function createConvenor(
   config: RuntimeConfig,
   token: string,
-  value: { name: string; phoneNumber: string },
+  value: { name: string; phoneNumber: string; email?: string },
 ) {
   return (
     await request<{ convenor: Convenor }>(config, token, '/admin/convenors', {

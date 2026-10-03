@@ -106,6 +106,7 @@ function friendlyError(error: unknown) {
     invalid_google_slides_url:
       'Paste a valid Google Slides sharing or published URL.',
     invalid_content_title: 'Enter a title between 2 and 100 characters.',
+    invalid_email_address: 'Enter a valid email address.',
     uploaded_image_does_not_match:
       'The uploaded image could not be verified. Please choose it again.',
     display_changed_retry:
@@ -149,10 +150,14 @@ export function DeployedControlRoom({ config }: { config: RuntimeConfig }) {
   const [actor, setActor] = useState<ControlActor | null>(null);
   const [convenors, setConvenors] = useState<Convenor[]>([]);
   const [selectedConvenor, setSelectedConvenor] = useState('');
+  const [convenorDelivery, setConvenorDelivery] = useState<'sms' | 'email'>(
+    'sms',
+  );
   const [codeRequested, setCodeRequested] = useState(false);
   const [oneTimeCode, setOneTimeCode] = useState('');
   const [convenorName, setConvenorName] = useState('');
   const [convenorPhone, setConvenorPhone] = useState('');
+  const [convenorEmail, setConvenorEmail] = useState('');
   const [showDiagnostics, setShowDiagnostics] = useState(false);
 
   const load = useCallback(
@@ -214,6 +219,8 @@ export function DeployedControlRoom({ config }: { config: RuntimeConfig }) {
       .then((items) => {
         setConvenors(items);
         setSelectedConvenor((current) => current || items[0]?.username || '');
+        if (items[0]?.deliveryMethods?.includes('email'))
+          setConvenorDelivery('email');
       })
       .catch(() => undefined);
   }, [config, token]);
@@ -260,6 +267,9 @@ export function DeployedControlRoom({ config }: { config: RuntimeConfig }) {
   );
   const slideshows = content.filter((item) => item.type === 'slideshow');
   const images = content.filter((item) => item.type === 'image');
+  const selectedConvenorAccount = convenors.find(
+    (item) => item.username === selectedConvenor,
+  );
 
   function deviceName(item: RemoteDevice) {
     return (
@@ -448,7 +458,18 @@ export function DeployedControlRoom({ config }: { config: RuntimeConfig }) {
                   className="h-11 w-full rounded-lg border border-black/15 bg-white px-3 text-sm"
                   disabled={codeRequested || busy}
                   id="convenor-name"
-                  onChange={(event) => setSelectedConvenor(event.target.value)}
+                  onChange={(event) => {
+                    const username = event.target.value;
+                    const account = convenors.find(
+                      (item) => item.username === username,
+                    );
+                    setSelectedConvenor(username);
+                    setConvenorDelivery(
+                      account?.deliveryMethods?.includes('email')
+                        ? 'email'
+                        : 'sms',
+                    );
+                  }}
                   value={selectedConvenor}
                 >
                   {convenors.map((item) => (
@@ -459,7 +480,10 @@ export function DeployedControlRoom({ config }: { config: RuntimeConfig }) {
                 </select>
                 {codeRequested ? (
                   <>
-                    <Label htmlFor="one-time-code">Code sent by SMS</Label>
+                    <Label htmlFor="one-time-code">
+                      Code sent by{' '}
+                      {convenorDelivery === 'email' ? 'email' : 'SMS'}
+                    </Label>
                     <Input
                       autoComplete="one-time-code"
                       id="one-time-code"
@@ -493,18 +517,50 @@ export function DeployedControlRoom({ config }: { config: RuntimeConfig }) {
                     </Button>
                   </>
                 ) : (
-                  <Button
-                    className="w-full bg-club-green text-white hover:bg-club-green/90"
-                    disabled={busy || !selectedConvenor}
-                    onClick={() =>
-                      void run(async () => {
-                        await requestConvenorCode(config, selectedConvenor);
-                        setCodeRequested(true);
-                      }, 'Code sent by SMS.')
-                    }
-                  >
-                    Text me a code
-                  </Button>
+                  <div className="space-y-3">
+                    {(selectedConvenorAccount?.deliveryMethods?.length ?? 0) >
+                      1 && (
+                      <div className="space-y-2">
+                        <Label htmlFor="convenor-delivery">Send code by</Label>
+                        <select
+                          className="h-11 w-full rounded-lg border border-black/15 bg-white px-3 text-sm"
+                          id="convenor-delivery"
+                          onChange={(event) =>
+                            setConvenorDelivery(
+                              event.target.value as 'sms' | 'email',
+                            )
+                          }
+                          value={convenorDelivery}
+                        >
+                          {selectedConvenorAccount?.deliveryMethods?.includes(
+                            'email',
+                          ) && <option value="email">Email</option>}
+                          {selectedConvenorAccount?.deliveryMethods?.includes(
+                            'sms',
+                          ) && <option value="sms">SMS</option>}
+                        </select>
+                      </div>
+                    )}
+                    <Button
+                      className="w-full bg-club-green text-white hover:bg-club-green/90"
+                      disabled={busy || !selectedConvenor}
+                      onClick={() =>
+                        void run(
+                          async () => {
+                            await requestConvenorCode(
+                              config,
+                              selectedConvenor,
+                              convenorDelivery,
+                            );
+                            setCodeRequested(true);
+                          },
+                          `Code sent by ${convenorDelivery === 'email' ? 'email' : 'SMS'}.`,
+                        )
+                      }
+                    >
+                      Send me a code
+                    </Button>
+                  </div>
                 )}
               </div>
             )}
@@ -825,13 +881,23 @@ export function DeployedControlRoom({ config }: { config: RuntimeConfig }) {
             </div>
             <Card className="border-0 bg-white ring-0">
               <CardContent className="space-y-4 pt-6">
-                <div className="grid gap-3 sm:grid-cols-2">
+                <div className="grid gap-3 sm:grid-cols-3">
                   <div className="space-y-2">
                     <Label htmlFor="convenor-new-name">Name</Label>
                     <Input
                       id="convenor-new-name"
                       onChange={(event) => setConvenorName(event.target.value)}
                       value={convenorName}
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="convenor-new-email">Email address</Label>
+                    <Input
+                      id="convenor-new-email"
+                      onChange={(event) => setConvenorEmail(event.target.value)}
+                      placeholder="name@example.com"
+                      type="email"
+                      value={convenorEmail}
                     />
                   </div>
                   <div className="space-y-2">
@@ -854,9 +920,11 @@ export function DeployedControlRoom({ config }: { config: RuntimeConfig }) {
                       await createConvenor(config, token, {
                         name: convenorName,
                         phoneNumber: convenorPhone,
+                        email: convenorEmail || undefined,
                       });
                       setConvenorName('');
                       setConvenorPhone('');
+                      setConvenorEmail('');
                     }, 'Convenor added.')
                   }
                 >
@@ -873,6 +941,11 @@ export function DeployedControlRoom({ config }: { config: RuntimeConfig }) {
                         <p className="text-sm text-court-ink/55">
                           {item.phoneNumber}
                         </p>
+                        {item.email && (
+                          <p className="text-sm text-court-ink/55">
+                            {item.email}
+                          </p>
+                        )}
                       </div>
                       <Button
                         aria-label={`Delete ${item.name}`}

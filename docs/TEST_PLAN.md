@@ -40,10 +40,11 @@ See [BROWSER_UX_TESTS.md](BROWSER_UX_TESTS.md) for desktop/mobile tests against 
 
 1. Open the CloudFront control room and reload once.
 2. Confirm the signed-out page exposes no committee controls.
-3. Sign in with an approved club Google account.
-4. Confirm the current TV selection is shown and no error banner is present.
-5. In **Schedule**, confirm the fallback is Honours Board and the weekly entries match the approved timetable. Save a harmless edit, then select **Schedule** in the Displays dropdown and confirm it becomes the selected mode.
-6. Select each court allocation once:
+3. Select a convenor with both delivery methods and confirm the selector offers **Email** and **SMS**. Request an email code, sign in, reload the browser and confirm the convenor remains signed in. Confirm this role can change or refresh an existing display but cannot see Users, add or delete content, or edit schedules. Sign out.
+4. Sign in with an approved club Google account.
+5. Confirm the current TV selection is shown and no error banner is present.
+6. In **Schedule**, confirm the fallback is Honours Board and the weekly entries match the approved timetable. Save a harmless edit, then select **Schedule** in the Displays dropdown and confirm it becomes the selected mode.
+7. Select each court allocation once:
    - Saturday Morning
    - Saturday Afternoon
    - Monday Night
@@ -52,17 +53,17 @@ See [BROWSER_UX_TESTS.md](BROWSER_UX_TESTS.md) for desktop/mobile tests against 
    - Wednesday Night
    - Thursday Mid-week Ladies
    - Thursday Night
-7. After each selection, confirm:
+8. After each selection, confirm:
    - the success banner says the content should appear within one minute;
    - that allocation is marked **On <display name>** (for example, **On Bar Room TV** or **On Kitchen TV**), with one badge per configured display currently showing it;
    - the API device record names the same content item;
    - the public device endpoint returns the same revision and source.
-8. Choose **Honours Board** and click **Show on TV**; confirm it becomes the current source.
-9. Select **Refresh TV** and confirm one new revision is created without changing the source.
-10. Restore the recorded starting content with **Show on TV**. The simplified control room has no restore-default button.
-11. In Content, edit a slideshow title/URL, add an image, replace it, and delete an unused item. Confirm the currently displayed item cannot be deleted.
-12. Upload a non-sensitive JPEG or PNG test image, confirm it appears in the library, display it temporarily, then restore the recorded starting content. The simplified control room has no **Use as honours** action.
-13. Sign out and confirm the controls disappear.
+9. Choose **Honours Board** and click **Show on TV**; confirm it becomes the current source.
+10. Select **Refresh TV** and confirm one new revision is created without changing the source.
+11. Restore the recorded starting content with **Show on TV**. The simplified control room has no restore-default button.
+12. In Content, edit a slideshow title/URL, add an image, replace it, and delete an unused item. Confirm the currently displayed item cannot be deleted.
+13. Upload a non-sensitive JPEG or PNG test image, confirm it appears in the library, display it temporarily, then restore the recorded starting content. The simplified control room has no **Use as honours** action.
+14. Sign out and confirm the controls disappear.
 
 ## AWS verification
 

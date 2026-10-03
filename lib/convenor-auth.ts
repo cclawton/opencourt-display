@@ -29,14 +29,22 @@ function configure(config: RuntimeConfig) {
 export async function requestConvenorCode(
   config: RuntimeConfig,
   username: string,
+  delivery: 'sms' | 'email',
 ) {
   configure(config);
   const result = await signIn({
     username,
-    options: { authFlowType: 'USER_AUTH', preferredChallenge: 'SMS_OTP' },
+    options: {
+      authFlowType: 'USER_AUTH',
+      preferredChallenge: delivery === 'email' ? 'EMAIL_OTP' : 'SMS_OTP',
+    },
   });
-  if (result.nextStep.signInStep !== 'CONFIRM_SIGN_IN_WITH_SMS_CODE')
-    throw new Error('The SMS code could not be requested.');
+  const expected =
+    delivery === 'email'
+      ? 'CONFIRM_SIGN_IN_WITH_EMAIL_CODE'
+      : 'CONFIRM_SIGN_IN_WITH_SMS_CODE';
+  if (result.nextStep.signInStep !== expected)
+    throw new Error(`The ${delivery} code could not be requested.`);
 }
 
 export async function confirmConvenorCode(config: RuntimeConfig, code: string) {

@@ -298,6 +298,7 @@ test('lists public names and lets admins manage no more than five convenors', as
       Attributes: [
         { Name: 'name', Value: 'Craig' },
         { Name: 'phone_number', Value: '+61404198867' },
+        { Name: 'email', Value: 'craig@example.test' },
       ],
     },
   ];
@@ -313,16 +314,27 @@ test('lists public names and lets admins manage no more than five convenors', as
   );
   const publicResult = await handler(event('/auth/convenors'));
   assert.deepEqual(JSON.parse(publicResult.body), {
-    convenors: [{ username: 'convenor_1', name: 'Craig' }],
+    convenors: [
+      {
+        username: 'convenor_1',
+        name: 'Craig',
+        deliveryMethods: ['sms', 'email'],
+      },
+    ],
   });
   const result = await handler(
     event('/admin/convenors', { authorization: 'Bearer valid-token' }, 'POST', {
       name: 'Craig',
       phoneNumber: '+61404198867',
+      email: 'craig@example.test',
     }),
   );
   assert.equal(result.statusCode, 201);
-  assert.deepEqual(created, { name: 'Craig', phoneNumber: '+61404198867' });
+  assert.deepEqual(created, {
+    name: 'Craig',
+    phoneNumber: '+61404198867',
+    email: 'craig@example.test',
+  });
 });
 
 test('lists, creates and edits generic content', async () => {

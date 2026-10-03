@@ -11,6 +11,7 @@ import * as lambda from 'aws-cdk-lib/aws-lambda';
 import * as lambdaNodejs from 'aws-cdk-lib/aws-lambda-nodejs';
 import * as logs from 'aws-cdk-lib/aws-logs';
 import * as s3 from 'aws-cdk-lib/aws-s3';
+import * as ses from 'aws-cdk-lib/aws-ses';
 import type { Construct } from 'constructs';
 
 export class OpenCourtControlStack extends cdk.Stack {
@@ -83,6 +84,51 @@ export class OpenCourtControlStack extends cdk.Stack {
         description:
           'Optional Google Workspace hosted domain (for example heatherdale.org.au).',
         allowedPattern: '^$|^[a-z0-9.-]+$',
+      },
+    );
+
+    const emailOtpSender = new cdk.CfnParameter(this, 'EmailOtpSender', {
+      type: 'String',
+      description: 'Verified SES sender address for convenor email OTP codes.',
+      allowedPattern: '^[^@\\s]+@[^@\\s]+\\.[^@\\s]+$',
+    });
+    const emailOtpSandboxRecipientOne = new cdk.CfnParameter(
+      this,
+      'EmailOtpSandboxRecipientOne',
+      {
+        type: 'String',
+        description: 'First SES sandbox recipient verified for the pilot.',
+        allowedPattern: '^[^@\\s]+@[^@\\s]+\\.[^@\\s]+$',
+      },
+    );
+    const emailOtpSandboxRecipientTwo = new cdk.CfnParameter(
+      this,
+      'EmailOtpSandboxRecipientTwo',
+      {
+        type: 'String',
+        description: 'Second SES sandbox recipient verified for the pilot.',
+        allowedPattern: '^[^@\\s]+@[^@\\s]+\\.[^@\\s]+$',
+      },
+    );
+    const enableConvenorEmailOtp = new cdk.CfnParameter(
+      this,
+      'EnableConvenorEmailOtp',
+      {
+        type: 'String',
+        default: 'false',
+        allowedValues: ['true', 'false'],
+        description:
+          'Enable Cognito EMAIL_OTP only after all SES identities are verified.',
+      },
+    );
+    const emailOtpEnabled = new cdk.CfnCondition(
+      this,
+      'ConvenorEmailOtpEnabled',
+      {
+        expression: cdk.Fn.conditionEquals(
+          enableConvenorEmailOtp.value,
+          'true',
+        ),
       },
     );
 
@@ -160,6 +206,18 @@ export class OpenCourtControlStack extends cdk.Stack {
       encryption: dynamodb.TableEncryption.AWS_MANAGED,
     });
 
+    const emailOtpSenderIdentity = new ses.CfnEmailIdentity(
+      this,
+      'EmailOtpSenderIdentity',
+      { emailIdentity: emailOtpSender.valueAsString },
+    );
+    new ses.CfnEmailIdentity(this, 'EmailOtpSandboxRecipientOneIdentity', {
+      emailIdentity: emailOtpSandboxRecipientOne.valueAsString,
+    });
+    new ses.CfnEmailIdentity(this, 'EmailOtpSandboxRecipientTwoIdentity', {
+      emailIdentity: emailOtpSandboxRecipientTwo.valueAsString,
+    });
+
     const smsExternalId = cdk.Fn.join('-', [resourcePrefix, 'cognito-sms']);
     const cognitoSmsRole = new iam.Role(this, 'ConvenorSmsRole', {
       assumedBy: new iam.ServicePrincipal('cognito-idp.amazonaws.com', {
@@ -191,6 +249,12 @@ export class OpenCourtControlStack extends cdk.Stack {
           mutable: true,
           required: true,
         },
+        {
+          name: 'email',
+          attributeDataType: 'String',
+          mutable: true,
+          required: false,
+        },
       ],
       smsConfiguration: {
         externalId: smsExternalId,
@@ -202,9 +266,34 @@ export class OpenCourtControlStack extends cdk.Stack {
     convenorPool.addResourceDependency(
       cognitoSmsPolicy.node.defaultChild as iam.CfnPolicy,
     );
+    convenorPool.addResourceDependency(emailOtpSenderIdentity);
     convenorPool.addPropertyOverride(
       'Policies.SignInPolicy.AllowedFirstAuthFactors',
-      ['PASSWORD', 'SMS_OTP'],
+      cdk.Fn.conditionIf(
+        emailOtpEnabled.logicalId,
+        ['PASSWORD', 'SMS_OTP', 'EMAIL_OTP'],
+        ['PASSWORD', 'SMS_OTP'],
+      ),
+    );
+    convenorPool.addPropertyOverride(
+      'EmailConfiguration',
+      cdk.Fn.conditionIf(
+        emailOtpEnabled.logicalId,
+        {
+          EmailSendingAccount: 'DEVELOPER',
+          From: cdk.Fn.join('', [
+            'OpenCourt <',
+            emailOtpSender.valueAsString,
+            '>',
+          ]),
+          SourceArn: this.formatArn({
+            service: 'ses',
+            resource: 'identity',
+            resourceName: emailOtpSender.valueAsString,
+          }),
+        },
+        { EmailSendingAccount: 'COGNITO_DEFAULT' },
+      ),
     );
     const convenorClient = new cognito.CfnUserPoolClient(
       this,

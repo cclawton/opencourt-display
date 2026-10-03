@@ -29,7 +29,14 @@ Admin routes are:
 - `POST /admin/devices/{deviceId}/actions` with `show_content` or `refresh` for the current control room. Legacy programme/image actions remain during migration and rollback.
 - `GET`, `POST` and `DELETE /admin/convenors[/<username>]` for Google administrators to manage the five-user convenor list.
 
-SMS delivery uses AWS End User Messaging through Cognito. A new AWS account remains in the SMS sandbox until production access is approved; while sandboxed, OTPs can only reach verified destination numbers. Keep the account SMS spend limit and the stack budget alerts low for the pilot.
+Convenors can request a Cognito passwordless code by SMS or email. SMS delivery uses AWS End User Messaging and email delivery uses Amazon SES. Both channels remain sandboxed until their respective production-access requests are approved. In the pilot, SMS can reach verified destination numbers and SES can send only from and to verified identities. Keep the account messaging spend limits and stack budget alerts low.
+
+Email OTP is enabled in two deployments so Cognito never points at an unverified sender:
+
+1. Deploy with `EnableConvenorEmailOtp=false` and provide `EmailOtpSender`, `EmailOtpSandboxRecipientOne`, and `EmailOtpSandboxRecipientTwo`. Each address receives an SES verification link.
+2. After the sender and each recipient who will use email report `SUCCESS`, deploy again with `EnableConvenorEmailOtp=true` using the same parameter values. Do not add an email attribute to a convenor until that recipient is verified while SES remains sandboxed.
+
+The browser then offers each convenor the delivery methods present on their Cognito record. The public convenor list exposes only the name, opaque username, and available method names; email addresses and phone numbers remain restricted to an authenticated administrator.
 
 Pilot support note (3 October 2026): AWS Support case `179093954200770` was opened to request SMS production access. The account's current support subscription does not permit the Support API, so check the case in the AWS Support Center. The convenor flow remains staged until AWS approves delivery to unverified numbers.
 
