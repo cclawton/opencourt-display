@@ -79,6 +79,11 @@ test('show every item and refresh without changing selection', async ({
     })),
     { action: 'refresh' },
   ]);
+  await expect(
+    page.getByText(
+      'Updated a Google Slides presentation? Use Refresh TV to show the latest changes.',
+    ),
+  ).toBeVisible();
 });
 
 test('create, edit, cancel deletion and delete unused slideshow', async ({
@@ -87,10 +92,13 @@ test('create, edit, cancel deletion and delete unused slideshow', async ({
 }) => {
   await page.getByRole('button', { name: 'Content', exact: true }).click();
   await page
-    .getByRole('button', { name: 'Add slideshow', exact: true })
+    .getByRole('button', {
+      name: 'Add public Google Slides presentation',
+      exact: true,
+    })
     .click();
   await expect(
-    page.getByText('Get the sharing link from Google Slides'),
+    page.getByText('Share a Google Slides presentation publicly'),
   ).toBeVisible();
   await expect(page.getByText('Select Copy link, then Done.')).toBeVisible();
   await page.getByLabel('Title', { exact: true }).fill('UX test slideshow');
@@ -121,7 +129,10 @@ test('validation failure preserves editor and allows retry', async ({
 }) => {
   await page.getByRole('button', { name: 'Content', exact: true }).click();
   await page
-    .getByRole('button', { name: 'Add slideshow', exact: true })
+    .getByRole('button', {
+      name: 'Add public Google Slides presentation',
+      exact: true,
+    })
     .click();
   await page.getByLabel('Title', { exact: true }).fill('Invalid example');
   await page.getByLabel('Google Slides URL').fill('https://example.com');

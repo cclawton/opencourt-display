@@ -26,7 +26,7 @@ npm install
 npm run dev
 ```
 
-Open the local URL printed by the development server. Use **TV display** for the local demonstration, **Control room** to preview it, and **First boot** to walk through device setup. The deployed committee control room has two focused sections: **Displays** chooses content for a TV, and **Content** creates, edits, replaces or deletes slideshows and images.
+Open the local URL printed by the development server. Use **TV display** for the local demonstration, **Control room** to preview it, and **First boot** to walk through device setup. In the deployed committee control room, **Displays** chooses or refreshes content for a TV, while **Content** manages public Google Slides presentations and still images. After editing a Google Slides presentation, select **Refresh TV** so the active display reloads the latest published content.
 
 ## Build the web application
 

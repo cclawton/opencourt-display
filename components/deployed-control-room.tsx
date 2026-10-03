@@ -867,6 +867,10 @@ export function DeployedControlRoom({ config }: { config: RuntimeConfig }) {
                     TV
                   </Button>
                 </div>
+                <p className="text-xs text-court-ink/50">
+                  Updated a Google Slides presentation? Use Refresh TV to show
+                  the latest changes.
+                </p>
               </CardContent>
             </Card>
           </div>
@@ -1141,7 +1145,7 @@ export function DeployedControlRoom({ config }: { config: RuntimeConfig }) {
                     setEditor({ mode: 'create-slideshow' });
                   }}
                 >
-                  <Presentation /> Add slideshow
+                  <Presentation /> Add public Google Slides presentation
                 </Button>
                 <Button
                   className="bg-club-green text-white hover:bg-club-green/90"
@@ -1160,7 +1164,7 @@ export function DeployedControlRoom({ config }: { config: RuntimeConfig }) {
                 <CardHeader>
                   <CardTitle className="text-lg">
                     {editor.mode === 'create-slideshow'
-                      ? 'Add slideshow'
+                      ? 'Add public Google Slides presentation'
                       : editor.mode === 'create-image'
                         ? 'Add image'
                         : 'Edit content'}
@@ -1189,7 +1193,7 @@ export function DeployedControlRoom({ config }: { config: RuntimeConfig }) {
                       {editor.mode === 'create-slideshow' && (
                         <div className="rounded-lg bg-green-50 px-4 py-3 text-sm text-court-ink/75">
                           <p className="font-bold text-court-ink">
-                            Get the sharing link from Google Slides
+                            Share a Google Slides presentation publicly
                           </p>
                           <ol className="mt-2 list-decimal space-y-1 pl-5">
                             <li>Open the presentation and select Share.</li>

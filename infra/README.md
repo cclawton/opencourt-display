@@ -8,7 +8,7 @@ The first stack contains:
 - a 128 MB ARM Lambda with reserved concurrency of five;
 - an anonymous read-only Function URL at `/devices/{deviceId}/config`;
 - Google ID-token protected committee routes for programme reads and display actions;
-- a Cognito Essentials user pool for passwordless SMS codes to at most five competition convenors;
+- a Cognito Essentials user pool for passwordless SMS or email codes to at most five competition convenors;
 - revocable 90-day browser sessions backed by an encrypted, on-demand DynamoDB table with automatic TTL expiry;
 - a private S3 bucket and CloudFront distribution for the static control room;
 - an authenticated image registry with short-lived, checksum-bound direct uploads to the same private bucket; and
@@ -17,7 +17,7 @@ The first stack contains:
 - ETag/`If-None-Match` support for one-minute Pi polling; and
 - an AWS Budget with actual-cost notifications at USD $1, $5 and $10, conservatively scoped to the Lambda, DynamoDB and CloudWatch service families used by the control plane.
 
-The public device route is still read-only. A Google Identity Services ID token for a committee administrator or a Cognito SMS OTP for a configured convenor establishes a 90-day control-room session. Identity credentials are verified server-side and never persisted. The browser stores only the random, revocable session token; the Pi stores no committee credential. Convenor sessions can read content and display state, show existing content, return to the schedule and refresh a display. The API denies content, schedule and user-management writes for that role.
+The public device route is still read-only. A Google Identity Services ID token for a committee administrator or a Cognito SMS/email OTP for a configured convenor establishes a 90-day control-room session. Identity credentials are verified server-side and never persisted. The browser stores only the random, revocable session token; the Pi stores no committee credential. Convenor sessions can read content and display state, show existing content, return to the schedule and refresh a display. The API denies content, schedule and user-management writes for that role.
 
 Admin routes are:
 
@@ -30,6 +30,8 @@ Admin routes are:
 - `GET`, `POST` and `DELETE /admin/convenors[/<username>]` for Google administrators to manage the five-user convenor list.
 
 Convenors can request a Cognito passwordless code by SMS or email. SMS delivery uses AWS End User Messaging and email delivery uses Amazon SES. Both channels remain sandboxed until their respective production-access requests are approved. In the pilot, SMS can reach verified destination numbers and SES can send only from and to verified identities. Keep the account messaging spend limits and stack budget alerts low.
+
+Cognito generates an eight-digit passwordless OTP and does not provide a code-length setting. The OTP is required only when establishing a new OpenCourt session; the resulting revocable application session lasts 90 days on that browser.
 
 Email OTP is enabled in two deployments so Cognito never points at an unverified sender:
 
