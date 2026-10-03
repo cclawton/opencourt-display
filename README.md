@@ -17,6 +17,8 @@ The project began at Heatherdale Tennis Club in Melbourne, Australia, but club n
 
 The local demonstration retains browser-only preview settings. When deployed with a real Google OAuth client and committee allow-list, its control room uses the AWS API for authenticated display changes and image uploads; Google credentials are never stored on a Pi.
 
+The deployed control room uses the Heatherdale Tennis Club logo in its banner and a Calibri-first type stack. The logo is a versioned public application asset, so it is restored with the site build rather than the private AWS data backup.
+
 ## Run on a laptop
 
 Requirements: Node.js 22.13 or newer.

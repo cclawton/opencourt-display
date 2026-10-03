@@ -116,6 +116,8 @@ npm run deploy:static -- --google-client-id YOUR_WEB_CLIENT_ID
 
 The script reads the stack outputs, writes a temporary runtime configuration, uploads the Vite assets to the private bucket, sets short caching for the HTML and runtime configuration, invalidates CloudFront and restores the local placeholder file. The site uses an S3 origin access control; the bucket is never public. CloudFront security response headers include CSP, HSTS, `X-Frame-Options` and `X-Content-Type-Options`.
 
+The static build includes public files from the repository, including the Heatherdale Tennis Club banner artwork. The interface requests Calibri first and uses Carlito, Segoe UI, Arial and the platform sans-serif as fallbacks when Calibri is unavailable. These reproducible site assets are restored by checking out the intended Git revision and rerunning this deployment; the private AWS data backup intentionally does not duplicate them.
+
 ## Weekly display schedule
 
 The control room stores an independent weekly schedule for each display. The Schedule tab names the schedule currently being edited and lets the user switch TVs without returning to Displays. Each schedule has an `Australia/Melbourne` timezone, an all-other-times fallback item, and non-overlapping day/time entries. The Pi evaluates its downloaded schedule locally on its regular poll loop, so a downloaded timetable continues to switch content during a cloud outage.

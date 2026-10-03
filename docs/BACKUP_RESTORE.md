@@ -12,6 +12,8 @@ The backup includes:
 
 Control-room browser sessions are deliberately excluded. Restored users sign in again and receive a new 90-day session. Google administrator access, Cognito/SES configuration, CloudFront, tables and buckets come from the CDK deployment rather than the data backup.
 
+Static control-room files are also excluded from the private data backup. They are reproducible from the repository, including the Heatherdale banner artwork in `public/heatherdale-tennis-club.png`, the Calibri-first site typography and the deployment script. After recreating the stack, build and publish the checked-out repository version to restore those files. This keeps application source and public branding in Git while the local backup contains only private and mutable AWS data.
+
 Backups contain personal contact details and device authentication material. They are written with owner-only permissions below the gitignored `.private-aws-backups/` directory. Keep a second encrypted copy in the club's password manager or encrypted backup storage; do not commit or email the directory.
 
 ## Create a backup
@@ -79,7 +81,7 @@ npm run restore -- \
 
 After restore:
 
-1. Deploy the static control room into the destination bucket with the destination stack's Google client configuration.
+1. Check out the required repository revision, build it, and deploy the static control room into the destination bucket with the destination stack's Google client configuration. Confirm the club logo and current site styling load from the destination CloudFront URL.
 2. Verify both displays, both schedules, all content, uploaded images, convenors and audit-history counts.
 3. Confirm each public device endpoint returns HTTP 200 and the expected revision.
 4. Point one Pi's private `/var/lib/opencourt/remote.json` at the destination `DeviceConfigBaseUrl`, restart it and confirm its heartbeat appears. The preserved device credential hash allows it to authenticate after the URL change.
