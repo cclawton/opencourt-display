@@ -50,6 +50,8 @@ No club password or Google credential is committed to the image or repository. T
 
 The cost-minimal AWS control plane is in [`infra/`](infra/README.md). It defines pay-per-request DynamoDB tables, a small ARM Lambda Function URL with ETag support, Google ID-token-protected committee actions, a retained audit trail, a private S3/CloudFront control room and image store, a guarded seed command and mandatory low-dollar billing alerts. Resource names and ownership tags are parameterised, with a [club-account migration runbook](infra/MIGRATION.md) for later transfer out of the pilot account.
 
+The [local AWS backup and restore runbook](docs/BACKUP_RESTORE.md) exports the application data, uploaded display images and convenor directory with checksums. It supports recovery into a clean stack, controlled merge recovery and an explicit exact-rollback mode without committing private backup data.
+
 Agent-assisted AWS work uses the official [Agent Toolkit for AWS](docs/AWS_AGENT_TOOLKIT.md), with repository guardrails for Sydney-region deployment, CDK, least privilege, cost control and future club ownership.
 
 Administrative writes are disabled until the pilot stack is deployed with the club's real Google web client ID and committee email allow-list. Placeholder values deliberately reject every administrator.

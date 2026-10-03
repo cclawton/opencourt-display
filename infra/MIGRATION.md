@@ -25,9 +25,11 @@ npx cdk deploy \
 
 The generated resource names and tags distinguish the production club deployment from the personal pilot. Check the AWS account ID and region shown by CDK before approving the deployment.
 
-## Copy configuration and verify
+## Back up and restore the application data
 
-Device configuration currently contains only public display sources and schedules. Review the pilot JSON, then seed a new revision into the production table with the repository's `npm run seed` command. Do not blindly export and import future records if the schema later includes private booking or audit data.
+Use the repository's local [backup and restore workflow](../docs/BACKUP_RESTORE.md) to copy both device schedules, content metadata, uploaded images, audit history and convenor accounts. Take a final backup while control-room changes are paused, verify its checksums with a restore dry run against the club stack, then apply it to the empty deployment. Browser sessions are intentionally excluded, and embedded CloudFront image URLs are rewritten for the new distribution.
+
+Backups contain convenor contact details and device authentication material. Keep them in encrypted club-controlled storage and never commit them to the repository.
 
 Before moving a display, confirm that its production endpoint:
 

@@ -49,6 +49,7 @@ infra/dist/
 
 # Private, unredistributable backup from the club's existing Raspberry Pi.
 /.private-pi-audit/
+/.private-aws-backups/
 .DS_Store
 deploy/pi-live/honours-board.jpg
 /heatherdale-honours-board-3840x2160.jpg
