@@ -28,6 +28,8 @@ npm run dev
 
 Open the local URL printed by the development server. Use **TV display** for the local demonstration, **Control room** to preview it, and **First boot** to walk through device setup. In the deployed committee control room, **Displays** chooses or refreshes content for a TV, while **Content** manages public Google Slides presentations and still images. After editing a Google Slides presentation, select **Refresh TV** so the active display reloads the latest published content.
 
+Committee administrators can use Displays, Content, Schedule and Users. Competition convenors sign in with an SMS or email one-time code and can use Displays and Schedule, but cannot manage the content library or user accounts. OpenCourt browser sessions last 90 days unless they are signed out or revoked.
+
 ## Build the web application
 
 ```bash

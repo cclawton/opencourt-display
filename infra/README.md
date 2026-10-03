@@ -42,6 +42,8 @@ The browser then offers each convenor the delivery methods present on their Cogn
 
 Pilot support note (3 October 2026): AWS Support case `179093954200770` was opened to request SMS production access. The account's current support subscription does not permit the Support API, so check the case in the AWS Support Center. The convenor flow remains staged until AWS approves delivery to unverified numbers.
 
+Pilot email status (3 October 2026): the SES sender and both configured convenor recipients report `SUCCESS`. Both existing convenor records have verified email attributes and advertise email and SMS as login options. Email OTP is live while SES remains in sandbox mode; adding another recipient requires verifying that address in SES before adding it to Cognito.
+
 S3 remains private and has no anonymous write path; the browser receives a signed URL for one specific object, checksum and content type. The displayed image URL is public through CloudFront because a clubhouse Pi must download it without storing committee credentials. Replacements use versioned object keys so an active display never loses its last-known-good image.
 
 ## Local verification

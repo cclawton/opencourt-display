@@ -32,6 +32,8 @@ This starts Vite on port 4173, supplies dummy runtime settings, and runs only th
 
 Use an approved Google account for a supervised read-only check of the actual nine library items and current TV selection. Verify real sign-out and account rejection as appropriate. Live mutations, API authorization, audit records and Pi delivery remain separate checks described in [TEST_PLAN.md](TEST_PLAN.md). Passing mocked workflows does not establish those properties. Any proposed deployment must follow AGENTS.md and be supported by a reproduced finding.
 
-## Verification record — 30 September 2026
+## Verification record — 3 October 2026
 
-Local Chromium: 16/16 workflow checks passed across desktop and mobile. Lint, TypeScript compilation and the production build passed. Starting the browser harness exposed a missing Vite `@/` import alias; the explicit alias is now configured. CloudFront execution is pending the deployed URL; no live authentication, seed verification or production mutations have been performed. No AWS deployment was attempted.
+The deployed CloudFront suite passed 26/26 checks across desktop and mobile Chromium after commit `bf8c7f0` was deployed. This includes the signed-out live smoke checks and isolated workflows for both roles. The convenor regression verifies that Displays and Schedule are available, a schedule can be saved, and the admin-only Content and Users sections remain hidden. Lint, TypeScript compilation, the production build, 22 infrastructure tests, 14 Pi/player tests and CDK synthesis also passed. The CloudFormation stack finished in `UPDATE_COMPLETE`, and its CloudFront invalidation completed before the deployed suite ran.
+
+The automated role workflows still use intercepted API responses and do not consume a real OTP. Craig subsequently completed a supervised email-OTP login against the deployed system. Both configured pilot convenors now have verified email attributes and email/SMS delivery choices.
