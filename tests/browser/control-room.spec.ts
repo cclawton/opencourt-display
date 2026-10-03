@@ -1,5 +1,32 @@
 import { test, expect, titles } from './fixture';
 
+test.describe('convenor navigation', () => {
+  test.use({ actorRole: 'convenor' });
+
+  test('keeps Displays available and hides administrative sections', async ({
+    page,
+    room: _room,
+  }) => {
+    const navigation = page.getByLabel('Control room sections');
+    await expect(
+      navigation.getByRole('button', { name: 'Displays', exact: true }),
+    ).toBeVisible();
+    await expect(
+      navigation.getByRole('button', { name: 'Schedule', exact: true }),
+    ).toHaveCount(0);
+    await expect(
+      navigation.getByRole('button', { name: 'Content', exact: true }),
+    ).toHaveCount(0);
+    await expect(
+      navigation.getByRole('button', { name: 'Users', exact: true }),
+    ).toHaveCount(0);
+    await expect(page.getByLabel('Choose what to show')).toBeVisible();
+    await expect(
+      page.getByRole('button', { name: 'Refresh TV' }),
+    ).toBeVisible();
+  });
+});
+
 test('nine seeded-shape items, current selection and responsive layout', async ({
   page,
   room,

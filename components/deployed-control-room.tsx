@@ -611,14 +611,12 @@ export function DeployedControlRoom({ config }: { config: RuntimeConfig }) {
           aria-label="Control room sections"
           className="mb-6 inline-flex rounded-xl bg-white p-1 shadow-sm ring-1 ring-black/5"
         >
-          {actor?.role === 'admin' && (
-            <button
-              className={`rounded-lg px-5 py-2 text-sm font-bold ${section === 'displays' ? 'bg-club-green text-white' : 'text-court-ink/60 hover:text-court-ink'}`}
-              onClick={() => setSection('displays')}
-            >
-              Displays
-            </button>
-          )}
+          <button
+            className={`rounded-lg px-5 py-2 text-sm font-bold ${section === 'displays' ? 'bg-club-green text-white' : 'text-court-ink/60 hover:text-court-ink'}`}
+            onClick={() => setSection('displays')}
+          >
+            Displays
+          </button>
           {actor?.role === 'admin' && (
             <button
               className={`rounded-lg px-5 py-2 text-sm font-bold ${section === 'content' ? 'bg-club-green text-white' : 'text-court-ink/60 hover:text-court-ink'}`}
@@ -635,12 +633,14 @@ export function DeployedControlRoom({ config }: { config: RuntimeConfig }) {
               Users
             </button>
           )}
-          <button
-            className={`rounded-lg px-5 py-2 text-sm font-bold ${section === 'schedule' ? 'bg-club-green text-white' : 'text-court-ink/60 hover:text-court-ink'}`}
-            onClick={() => setSection('schedule')}
-          >
-            Schedule
-          </button>
+          {actor?.role === 'admin' && (
+            <button
+              className={`rounded-lg px-5 py-2 text-sm font-bold ${section === 'schedule' ? 'bg-club-green text-white' : 'text-court-ink/60 hover:text-court-ink'}`}
+              onClick={() => setSection('schedule')}
+            >
+              Schedule
+            </button>
+          )}
         </nav>
 
         {(message || error) && (

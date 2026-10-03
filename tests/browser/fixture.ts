@@ -12,6 +12,7 @@ export const titles = [
   'Honours Board',
 ];
 export const test = base.extend<{
+  actorRole: 'admin' | 'convenor';
   room: {
     writes: {
       method: string;
@@ -21,7 +22,8 @@ export const test = base.extend<{
     fail: (error: string) => void;
   };
 }>({
-  room: async ({ page, baseURL }, provide) => {
+  actorRole: ['admin', { option: true }],
+  room: async ({ page, baseURL, actorRole }, provide) => {
     let content = titles.map((title, i) => ({
       contentId: `fixture-${i}`,
       title,
@@ -139,7 +141,7 @@ export const test = base.extend<{
             actor: {
               name: 'Club Admin',
               email: 'admin@example.test',
-              role: 'admin',
+              role: actorRole,
             },
           },
         });
