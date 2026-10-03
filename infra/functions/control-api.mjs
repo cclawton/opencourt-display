@@ -750,7 +750,9 @@ export function createHandler({
             Boolean(deviceIdFromAdminPath(rawPath)));
         const allowedAction =
           method === 'POST' && Boolean(deviceIdFromActionPath(rawPath));
-        if (!allowedRead && !allowedAction)
+        const allowedSchedule =
+          method === 'PUT' && Boolean(deviceIdFromSchedulePath(rawPath));
+        if (!allowedRead && !allowedAction && !allowedSchedule)
           throw new HttpError(403, 'admin_access_required');
       }
 

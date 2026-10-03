@@ -231,7 +231,7 @@ test('requires a bearer credential for every admin route', async () => {
   assert.equal((await handler(event('/admin/content'))).statusCode, 401);
 });
 
-test('limits convenors to reading content and changing the display', async () => {
+test('limits convenors to display and schedule management', async () => {
   const handler = createHandler(
     dependencies({
       verifyToken: async () => ({
@@ -259,10 +259,13 @@ test('limits convenors to reading content and changing the display', async () =>
   assert.equal(
     (
       await handler(
-        event('/admin/devices/honours-board-tv/schedule', headers, 'PUT', {}),
+        event('/admin/devices/honours-board-tv/schedule', headers, 'PUT', {
+          fallbackContentId: 'sat-am',
+          entries: [],
+        }),
       )
     ).statusCode,
-    403,
+    200,
   );
   assert.equal(
     (await handler(event('/admin/convenors', headers))).statusCode,

@@ -40,7 +40,7 @@ See [BROWSER_UX_TESTS.md](BROWSER_UX_TESTS.md) for desktop/mobile tests against 
 
 1. Open the CloudFront control room and reload once.
 2. Confirm the signed-out page exposes no committee controls.
-3. Select a convenor with both delivery methods and confirm the selector offers **Email** and **SMS**. Request an email code, sign in, reload the browser and confirm the convenor remains signed in. Confirm this role can change or refresh an existing display but cannot see Users, add or delete content, or edit schedules. Sign out.
+3. Select a convenor with both delivery methods and confirm the selector offers **Email** and **SMS**. Request an email code, sign in, reload the browser and confirm the convenor remains signed in. Confirm this role can use Displays, edit schedules and refresh an existing display, but cannot see Users or add, edit or delete content. Sign out.
 4. Sign in with an approved club Google account.
 5. Confirm the current TV selection is shown and no error banner is present.
 6. In **Schedule**, confirm the fallback is Honours Board and the weekly entries match the approved timetable. Save a harmless edit, then select **Schedule** in the Displays dropdown and confirm it becomes the selected mode.

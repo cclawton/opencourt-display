@@ -3,9 +3,9 @@ import { test, expect, titles } from './fixture';
 test.describe('convenor navigation', () => {
   test.use({ actorRole: 'convenor' });
 
-  test('keeps Displays available and hides administrative sections', async ({
+  test('provides Displays and Schedule but hides admin-only sections', async ({
     page,
-    room: _room,
+    room,
   }) => {
     const navigation = page.getByLabel('Control room sections');
     await expect(
@@ -13,7 +13,7 @@ test.describe('convenor navigation', () => {
     ).toBeVisible();
     await expect(
       navigation.getByRole('button', { name: 'Schedule', exact: true }),
-    ).toHaveCount(0);
+    ).toBeVisible();
     await expect(
       navigation.getByRole('button', { name: 'Content', exact: true }),
     ).toHaveCount(0);
@@ -24,6 +24,20 @@ test.describe('convenor navigation', () => {
     await expect(
       page.getByRole('button', { name: 'Refresh TV' }),
     ).toBeVisible();
+    await navigation
+      .getByRole('button', { name: 'Schedule', exact: true })
+      .click();
+    await page.getByRole('button', { name: 'Add time' }).click();
+    await page.getByRole('button', { name: 'Save schedule' }).click();
+    await expect(page.getByRole('status')).toContainText('Schedule saved.');
+    expect(room.writes.at(-1)).toMatchObject({
+      method: 'PUT',
+      path: '/admin/devices/honours-board-tv/schedule',
+    });
+    await navigation
+      .getByRole('button', { name: 'Displays', exact: true })
+      .click();
+    await expect(page.getByLabel('Choose what to show')).toBeVisible();
   });
 });
 

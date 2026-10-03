@@ -633,14 +633,12 @@ export function DeployedControlRoom({ config }: { config: RuntimeConfig }) {
               Users
             </button>
           )}
-          {actor?.role === 'admin' && (
-            <button
-              className={`rounded-lg px-5 py-2 text-sm font-bold ${section === 'schedule' ? 'bg-club-green text-white' : 'text-court-ink/60 hover:text-court-ink'}`}
-              onClick={() => setSection('schedule')}
-            >
-              Schedule
-            </button>
-          )}
+          <button
+            className={`rounded-lg px-5 py-2 text-sm font-bold ${section === 'schedule' ? 'bg-club-green text-white' : 'text-court-ink/60 hover:text-court-ink'}`}
+            onClick={() => setSection('schedule')}
+          >
+            Schedule
+          </button>
         </nav>
 
         {(message || error) && (
@@ -879,8 +877,8 @@ export function DeployedControlRoom({ config }: { config: RuntimeConfig }) {
             <div>
               <h1 className="font-display text-2xl font-black">Users</h1>
               <p className="text-sm text-court-ink/55">
-                Add up to five competition convenors. They can change and
-                refresh the TV display.
+                Add up to five competition convenors. They can change, refresh
+                and schedule TV displays.
               </p>
             </div>
             <Card className="border-0 bg-white ring-0">

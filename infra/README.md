@@ -17,7 +17,7 @@ The first stack contains:
 - ETag/`If-None-Match` support for one-minute Pi polling; and
 - an AWS Budget with actual-cost notifications at USD $1, $5 and $10, conservatively scoped to the Lambda, DynamoDB and CloudWatch service families used by the control plane.
 
-The public device route is still read-only. A Google Identity Services ID token for a committee administrator or a Cognito SMS/email OTP for a configured convenor establishes a 90-day control-room session. Identity credentials are verified server-side and never persisted. The browser stores only the random, revocable session token; the Pi stores no committee credential. Convenor sessions can read content and display state, show existing content, return to the schedule and refresh a display. The API denies content, schedule and user-management writes for that role.
+The public device route is still read-only. A Google Identity Services ID token for a committee administrator or a Cognito SMS/email OTP for a configured convenor establishes a 90-day control-room session. Identity credentials are verified server-side and never persisted. The browser stores only the random, revocable session token; the Pi stores no committee credential. Convenor sessions can read content and display state, show existing content, edit or restore schedules, and refresh a display. The API denies content-library and user-management writes for that role.
 
 Admin routes are:
 
