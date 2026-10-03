@@ -1,0 +1,31 @@
+#!/bin/sh
+set -eu
+
+source_cursor=/tmp/opencourt-transparent-cursor
+cursor_directory=/usr/share/icons/Adwaita/cursors
+backup=/var/backups/opencourt-adwaita-cursors-2026-10-03.tar.gz
+
+test "$(id -u)" -eq 0 || {
+  echo "Run this installer with sudo." >&2
+  exit 1
+}
+file "$source_cursor" | grep -q 'Xcursor data' || {
+  echo "The staged transparent cursor is missing or invalid." >&2
+  exit 1
+}
+test -d "$cursor_directory"
+
+if test ! -f "$backup"; then
+  tar -C /usr/share/icons -czf "$backup" Adwaita/cursors
+fi
+
+find "$cursor_directory" -mindepth 1 -maxdepth 1 -printf '%f\n' |
+  while IFS= read -r cursor_name; do
+    rm -f "$cursor_directory/$cursor_name"
+    install -m 0644 "$source_cursor" "$cursor_directory/$cursor_name"
+  done
+
+systemctl restart opencourt-kiosk.service
+systemctl is-active opencourt-kiosk.service
+
+echo "Original cursors are backed up at $backup"

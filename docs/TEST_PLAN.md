@@ -32,13 +32,18 @@ The suites must cover:
 - Lambda IAM permission to read and write the device table;
 - CORS ownership by the Lambda Function URL, with no duplicate origin header.
 
+## Browser UX automation
+
+See [BROWSER_UX_TESTS.md](BROWSER_UX_TESTS.md) for desktop/mobile tests against the deployed static application, with a read-only smoke test and isolated committee workflows. This suite does not change the live TV or verify actual authenticated API writes.
+
 ## Live browser acceptance loop
 
 1. Open the CloudFront control room and reload once.
 2. Confirm the signed-out page exposes no committee controls.
 3. Sign in with an approved club Google account.
 4. Confirm the current TV selection is shown and no error banner is present.
-5. Select each court allocation once:
+5. In **Schedule**, confirm the fallback is Honours Board and the weekly entries match the approved timetable. Save a harmless edit, then select **Schedule** in the Displays dropdown and confirm it becomes the selected mode.
+6. Select each court allocation once:
    - Saturday Morning
    - Saturday Afternoon
    - Monday Night
@@ -47,17 +52,17 @@ The suites must cover:
    - Wednesday Night
    - Thursday Mid-week Ladies
    - Thursday Night
-6. After each selection, confirm:
-   - the success banner reports a new revision;
-   - that allocation is marked **On TV**;
-   - the API device record names the same programme;
+7. After each selection, confirm:
+   - the success banner says the content should appear within one minute;
+   - that allocation is marked **On <display name>** (for example, **On Bar Room TV** or **On Kitchen TV**), with one badge per configured display currently showing it;
+   - the API device record names the same content item;
    - the public device endpoint returns the same revision and source.
-7. Select **Show honours** and confirm the honours board becomes the current source.
-8. Select **Refresh TV now** and confirm one new revision is created without changing the source.
-9. Select **Restore default** and confirm the configured default source is restored.
-10. In Content, edit a slideshow title/URL, add an image, replace it, and delete an unused item. Confirm the currently displayed item cannot be deleted.
-11. Upload a non-sensitive JPEG or PNG test image, confirm it appears in the library, display it temporarily, then restore the default. Only exercise **Use as honours** with an approved 3840×2160 club image.
-12. Sign out and confirm the controls disappear.
+8. Choose **Honours Board** and click **Show on TV**; confirm it becomes the current source.
+9. Select **Refresh TV** and confirm one new revision is created without changing the source.
+10. Restore the recorded starting content with **Show on TV**. The simplified control room has no restore-default button.
+11. In Content, edit a slideshow title/URL, add an image, replace it, and delete an unused item. Confirm the currently displayed item cannot be deleted.
+12. Upload a non-sensitive JPEG or PNG test image, confirm it appears in the library, display it temporarily, then restore the recorded starting content. The simplified control room has no **Use as honours** action.
+13. Sign out and confirm the controls disappear.
 
 ## AWS verification
 

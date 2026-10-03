@@ -6,15 +6,20 @@ from __future__ import annotations
 import json
 import hashlib
 import os
+import platform
 from pathlib import Path
 import signal
+import shutil
+import socket
 import subprocess
 import sys
+from datetime import datetime
 from threading import Event
 from typing import Any
 from urllib.error import HTTPError
 from urllib.parse import parse_qsl, urlencode, urlparse, urlunparse
 from urllib.request import Request, urlopen
+from zoneinfo import ZoneInfo
 
 CONTENT_DIR = Path(os.environ.get("OPENCOURT_CONTENT_DIR", "/var/lib/opencourt"))
 CONFIG_PATH = Path(os.environ.get("OPENCOURT_CONFIG", CONTENT_DIR / "device-config.json"))
@@ -44,7 +49,57 @@ def load_config(path: Path = CONFIG_PATH) -> dict[str, Any]:
     config_revision(config)
     if not isinstance(config.get("source"), dict):
         raise ConfigError("source is required")
+    if config.get("mode", "manual") == "schedule":
+        validate_schedule(config.get("schedule"))
+    elif config.get("mode", "manual") != "manual":
+        raise ConfigError("mode must be manual or schedule")
     return config
+
+
+def time_minutes(value: str) -> int:
+    if not isinstance(value, str) or len(value) != 5 or value[2] != ":":
+        raise ConfigError("schedule time is invalid")
+    try:
+        hours, minutes = (int(part) for part in value.split(":"))
+    except ValueError as error:
+        raise ConfigError("schedule time is invalid") from error
+    if not 0 <= hours <= 23 or not 0 <= minutes <= 59:
+        if hours == 24 and minutes == 0:
+            return 24 * 60
+        raise ConfigError("schedule time is invalid")
+    return hours * 60 + minutes
+
+
+def validate_schedule(schedule: Any) -> None:
+    if not isinstance(schedule, dict) or schedule.get("timezone") != "Australia/Melbourne":
+        raise ConfigError("schedule timezone is invalid")
+    fallback = schedule.get("fallback")
+    entries = schedule.get("entries")
+    if not isinstance(fallback, dict) or not isinstance(fallback.get("source"), dict) or not isinstance(entries, list):
+        raise ConfigError("schedule is invalid")
+    previous: dict[str, int] = {}
+    for entry in entries:
+        if not isinstance(entry, dict) or entry.get("day") not in {"Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"} or not isinstance(entry.get("source"), dict):
+            raise ConfigError("schedule entry is invalid")
+        start = time_minutes(entry.get("startTime"))
+        end = time_minutes(entry.get("endTime"))
+        if start >= end or start < previous.get(entry["day"], -1):
+            raise ConfigError("schedule windows overlap or are invalid")
+        previous[entry["day"]] = end
+
+
+def scheduled_source(config: dict[str, Any], current_time: datetime | None = None) -> dict[str, Any]:
+    if config.get("mode", "manual") != "schedule":
+        return config["source"]
+    schedule = config["schedule"]
+    validate_schedule(schedule)
+    now = current_time or datetime.now(ZoneInfo(schedule["timezone"]))
+    minute = now.hour * 60 + now.minute
+    day = now.strftime("%A")
+    for entry in schedule["entries"]:
+        if entry["day"] == day and time_minutes(entry["startTime"]) <= minute < time_minutes(entry["endTime"]):
+            return entry["source"]
+    return schedule["fallback"]["source"]
 
 
 def load_remote_settings(path: Path = REMOTE_PATH) -> dict[str, str] | None:
@@ -54,6 +109,8 @@ def load_remote_settings(path: Path = REMOTE_PATH) -> dict[str, str] | None:
 
     device_id = str(settings.get("deviceId", "")).strip()
     config_url = str(settings.get("configUrl", "")).strip()
+    status_url = str(settings.get("statusUrl", "")).strip()
+    status_token = str(settings.get("statusToken", "")).strip()
     if not device_id:
         raise ConfigError("remote deviceId is required")
     if not config_url:
@@ -66,7 +123,96 @@ def load_remote_settings(path: Path = REMOTE_PATH) -> dict[str, str] | None:
     if not parsed.netloc or parsed.username or parsed.password:
         raise ConfigError("remote config URL is invalid")
 
-    return {"deviceId": device_id, "configUrl": config_url}
+    if status_url:
+        parsed_status = urlparse(status_url)
+        if parsed_status.scheme != "https" or not parsed_status.netloc:
+            raise ConfigError("remote status URL must use HTTPS")
+        if len(status_token) < 32:
+            raise ConfigError("remote status token is invalid")
+
+    return {
+        "deviceId": device_id,
+        "configUrl": config_url,
+        "statusUrl": status_url,
+        "statusToken": status_token,
+    }
+
+
+def _read_text(path: str, fallback: str = "") -> str:
+    try:
+        return Path(path).read_text(encoding="utf-8").replace("\x00", "").strip()
+    except OSError:
+        return fallback
+
+
+def _primary_ip() -> str:
+    connection = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+    try:
+        connection.connect(("1.1.1.1", 53))
+        return str(connection.getsockname()[0])
+    except OSError:
+        return ""
+    finally:
+        connection.close()
+
+
+def device_diagnostics() -> dict[str, Any]:
+    os_name = ""
+    for line in _read_text("/etc/os-release").splitlines():
+        if line.startswith("PRETTY_NAME="):
+            os_name = line.split("=", 1)[1].strip('"')
+            break
+    memory_kib = 0
+    for line in _read_text("/proc/meminfo").splitlines():
+        if line.startswith("MemTotal:"):
+            memory_kib = int(line.split()[1])
+            break
+    try:
+        uptime_seconds = int(float(_read_text("/proc/uptime", "0").split()[0]))
+    except (ValueError, IndexError):
+        uptime_seconds = 0
+    storage = shutil.disk_usage("/")
+    return {
+        "hardware": {
+            "model": _read_text("/proc/device-tree/model", platform.machine()),
+            "architecture": platform.machine(),
+            "cpuCount": os.cpu_count() or 0,
+            "memoryMiB": round(memory_kib / 1024),
+            "storageTotalGiB": round(storage.total / (1024**3), 1),
+            "storageFreeGiB": round(storage.free / (1024**3), 1),
+        },
+        "system": {
+            "hostname": socket.gethostname(),
+            "operatingSystem": os_name or platform.system(),
+            "kernel": platform.release(),
+            "uptimeSeconds": uptime_seconds,
+            "playerVersion": "2026-10-03",
+        },
+        "network": {"primaryIp": _primary_ip()},
+    }
+
+
+def report_device_status(
+    settings: dict[str, str], revision: int | None, opener: Any = None
+) -> None:
+    if not settings.get("statusUrl"):
+        return
+    payload = device_diagnostics()
+    payload["revision"] = revision
+    request = Request(
+        settings["statusUrl"],
+        data=json.dumps(payload).encode("utf-8"),
+        headers={
+            "Authorization": f"Bearer {settings['statusToken']}",
+            "Content-Type": "application/json",
+            "User-Agent": "OpenCourt-Display/0.1",
+        },
+        method="POST",
+    )
+    open_request = opener or urlopen
+    with open_request(request, timeout=15) as response:
+        if response.status != 200:
+            raise ConfigError("device status report was rejected")
 
 
 def fetch_remote_config(
@@ -108,6 +254,8 @@ def validate_remote_config(config: dict[str, Any], device_id: str) -> None:
     config_revision(config, "remote configuration")
     if not isinstance(config.get("source"), dict):
         raise ConfigError("remote config source is required")
+    if config.get("mode", "manual") == "schedule":
+        validate_schedule(config.get("schedule"))
 
 
 def write_config_atomically(config: dict[str, Any], path: Path = CONFIG_PATH) -> None:
@@ -268,7 +416,7 @@ def image_player_url(source: dict[str, Any], revision: str) -> str:
 
 
 def target_url(config: dict[str, Any]) -> str:
-    source = config["source"]
+    source = scheduled_source(config)
     revision = str(config["revision"])
     if source.get("type") == "image":
         return image_player_url(source, revision)
@@ -287,6 +435,8 @@ def browser_command(url: str) -> list[str]:
         "--disable-session-crashed-bubble",
         "--disable-translate",
         "--disable-pinch",
+        "--ash-hide-cursor-in-kiosk",
+        "--hide-scrollbars",
         "--overscroll-history-navigation=0",
         "--enable-features=UseOzonePlatform",
         "--ozone-platform=wayland",
@@ -339,7 +489,7 @@ def main() -> int:
                     stop_browser(browser)
                     print(
                         f"OpenCourt: launching revision {candidate_revision} "
-                        f"({local_config['source']['type']})",
+                        f"({scheduled_source(local_config)['type']})",
                         flush=True,
                     )
                     browser = subprocess.Popen(browser_command(candidate_url))
@@ -360,6 +510,10 @@ def main() -> int:
                             flush=True,
                         )
                         continue
+                    report_device_status(
+                        remote_settings,
+                        config_revision(local_config) if local_config else None,
+                    )
             except (ConfigError, HTTPError, json.JSONDecodeError, OSError, TypeError, ValueError) as error:
                 print(f"OpenCourt: remote update skipped: {error}", file=sys.stderr, flush=True)
 

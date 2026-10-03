@@ -2,9 +2,11 @@ import importlib.util
 from importlib.machinery import SourceFileLoader
 import hashlib
 import json
+from datetime import datetime
 from pathlib import Path
 import tempfile
 import unittest
+from unittest import mock
 
 
 SCRIPT_PATH = Path(__file__).parents[1] / "deploy" / "pi-live" / "opencourt-player"
@@ -88,6 +90,39 @@ class PlayerSupervisorTests(unittest.TestCase):
             )
             with self.assertRaises(PLAYER.ConfigError):
                 PLAYER.load_config(config_path)
+
+    def test_schedule_uses_melbourne_windows_and_honours_fallback(self):
+        honours = {"type": "image", "url": "honours-board.jpg"}
+        config = {
+            "schemaVersion": 1,
+            "revision": 2,
+            "source": honours,
+            "mode": "schedule",
+            "schedule": {
+                "timezone": "Australia/Melbourne",
+                "fallback": {"contentId": "honours-board", "name": "Honours Board", "source": honours},
+                "entries": [
+                    {"day": "Tuesday", "startTime": "14:00", "endTime": "17:00", "contentId": "tue-ladies", "name": "Tuesday Mid-week Ladies", "source": {"type": "google_slides", "url": "https://docs.google.com/presentation/d/tuesday/preview"}},
+                    {"day": "Tuesday", "startTime": "17:00", "endTime": "24:00", "contentId": "tue-night", "name": "Tuesday Night", "source": {"type": "google_slides", "url": "https://docs.google.com/presentation/d/tuesday-night/preview"}},
+                ],
+            },
+        }
+        self.assertEqual(
+            PLAYER.scheduled_source(config, datetime(2026, 9, 29, 13, 59))["url"],
+            "honours-board.jpg",
+        )
+        self.assertEqual(
+            PLAYER.scheduled_source(config, datetime(2026, 9, 29, 14, 0))["url"],
+            "https://docs.google.com/presentation/d/tuesday/preview",
+        )
+        self.assertEqual(
+            PLAYER.scheduled_source(config, datetime(2026, 9, 29, 17, 0))["url"],
+            "https://docs.google.com/presentation/d/tuesday-night/preview",
+        )
+        self.assertEqual(
+            PLAYER.scheduled_source(config, datetime(2026, 9, 29, 23, 59))["url"],
+            "https://docs.google.com/presentation/d/tuesday-night/preview",
+        )
 
     def test_remote_png_is_dimension_checked_and_cached_atomically(self):
         png = (
@@ -252,6 +287,45 @@ class PlayerSupervisorTests(unittest.TestCase):
                 None,
                 opener,
             )
+
+    def test_status_report_uses_separate_device_credential(self):
+        requests = []
+
+        class Response:
+            status = 200
+
+            def __enter__(self):
+                return self
+
+            def __exit__(self, *_args):
+                return False
+
+        def opener(request, timeout):
+            requests.append((request, timeout))
+            return Response()
+
+        with mock.patch.object(
+            PLAYER,
+            "device_diagnostics",
+            return_value={"network": {"primaryIp": "192.168.1.42"}},
+        ):
+            PLAYER.report_device_status(
+                {
+                    "statusUrl": "https://display.example/status",
+                    "statusToken": "a" * 32,
+                },
+                7,
+                opener,
+            )
+        request, timeout = requests[0]
+        self.assertEqual(timeout, 15)
+        self.assertEqual(request.get_header("Authorization"), f"Bearer {'a' * 32}")
+        self.assertEqual(json.loads(request.data)["revision"], 7)
+
+    def test_browser_hides_cursor_in_kiosk_mode(self):
+        command = PLAYER.browser_command("https://example.test")
+        self.assertIn("--ash-hide-cursor-in-kiosk", command)
+        self.assertIn("--hide-scrollbars", command)
 
     def test_atomic_config_write_replaces_complete_document(self):
         with tempfile.TemporaryDirectory() as directory:

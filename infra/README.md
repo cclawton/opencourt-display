@@ -8,6 +8,8 @@ The first stack contains:
 - a 128 MB ARM Lambda with reserved concurrency of five;
 - an anonymous read-only Function URL at `/devices/{deviceId}/config`;
 - Google ID-token protected committee routes for programme reads and display actions;
+- a Cognito Essentials user pool for passwordless SMS codes to at most five competition convenors;
+- revocable 90-day browser sessions backed by an encrypted, on-demand DynamoDB table with automatic TTL expiry;
 - a private S3 bucket and CloudFront distribution for the static control room;
 - an authenticated image registry with short-lived, checksum-bound direct uploads to the same private bucket; and
 - a retained DynamoDB audit table for every authenticated display change; and
@@ -15,7 +17,7 @@ The first stack contains:
 - ETag/`If-None-Match` support for one-minute Pi polling; and
 - an AWS Budget with actual-cost notifications at USD $1, $5 and $10, conservatively scoped to the Lambda, DynamoDB and CloudWatch service families used by the control plane.
 
-The public device route is still read-only. Administrative writes require a Google Identity Services ID token, an exact email allow-list and (when configured) a Google Workspace hosted-domain check. Tokens are verified server-side with Google's maintained Node auth library; they are never stored on the Pi or in local storage.
+The public device route is still read-only. A Google Identity Services ID token for a committee administrator or a Cognito SMS OTP for a configured convenor establishes a 90-day control-room session. Identity credentials are verified server-side and never persisted. The browser stores only the random, revocable session token; the Pi stores no committee credential. Convenor sessions can read content and display state, show existing content, return to the schedule and refresh a display. The API denies content, schedule and user-management writes for that role.
 
 Admin routes are:
 
@@ -25,6 +27,11 @@ Admin routes are:
 - `DELETE /admin/content/{contentId}` to delete unused content. The API refuses to delete the content currently shown on a display.
 - `GET /admin/devices/{deviceId}`
 - `POST /admin/devices/{deviceId}/actions` with `show_content` or `refresh` for the current control room. Legacy programme/image actions remain during migration and rollback.
+- `GET`, `POST` and `DELETE /admin/convenors[/<username>]` for Google administrators to manage the five-user convenor list.
+
+SMS delivery uses AWS End User Messaging through Cognito. A new AWS account remains in the SMS sandbox until production access is approved; while sandboxed, OTPs can only reach verified destination numbers. Keep the account SMS spend limit and the stack budget alerts low for the pilot.
+
+Pilot support note (3 October 2026): AWS Support case `179093954200770` was opened to request SMS production access. The account's current support subscription does not permit the Support API, so check the case in the AWS Support Center. The convenor flow remains staged until AWS approves delivery to unverified numbers.
 
 S3 remains private and has no anonymous write path; the browser receives a signed URL for one specific object, checksum and content type. The displayed image URL is public through CloudFront because a clubhouse Pi must download it without storing committee credentials. Replacements use versioned object keys so an active display never loses its last-known-good image.
 
@@ -92,3 +99,19 @@ npm run deploy:static -- --google-client-id YOUR_WEB_CLIENT_ID
 ```
 
 The script reads the stack outputs, writes a temporary runtime configuration, uploads the Vite assets to the private bucket, sets short caching for the HTML and runtime configuration, invalidates CloudFront and restores the local placeholder file. The site uses an S3 origin access control; the bucket is never public. CloudFront security response headers include CSP, HSTS, `X-Frame-Options` and `X-Content-Type-Options`.
+
+## Weekly display schedule
+
+The control room can store a weekly schedule per display. It has an `Australia/Melbourne` timezone, an all-other-times fallback item, and non-overlapping day/time entries. The Pi evaluates the downloaded schedule locally on its regular poll loop, so a downloaded timetable continues to switch content during a cloud outage.
+
+After deployment, seed the retained legacy timetable only after confirming the nine content titles are present. It uses **Honours Board** as the fallback and activates schedule mode:
+
+```bash
+npm run seed-legacy-schedule -- \
+  --device-table opencourt-heatherdale-pilot-device-configurations \
+  --content-table opencourt-heatherdale-pilot-content-items \
+  --device-id honours-board-tv \
+  --region ap-southeast-2
+```
+
+The seed writes a strictly newer device revision and is intentionally not idempotent. Run it once, then use the Schedule page for future edits.

@@ -19,7 +19,12 @@ test('control API can read and transactionally update the device configuration',
         Match.objectLike({
           Action: Match.arrayWith(['dynamodb:GetItem', 'dynamodb:PutItem']),
           Effect: 'Allow',
-          Resource: { 'Fn::GetAtt': [Match.stringLikeRegexp('DeviceConfigurations'), 'Arn'] },
+          Resource: {
+            'Fn::GetAtt': [
+              Match.stringLikeRegexp('DeviceConfigurations'),
+              'Arn',
+            ],
+          },
         }),
       ]),
     },
@@ -29,9 +34,41 @@ test('control API can read and transactionally update the device configuration',
   assert.ok(Object.keys(policies).length > 0);
 
   const tables = template.findResources('AWS::DynamoDB::Table');
-  assert.ok(Object.keys(tables).some((logicalId) => logicalId.startsWith('DeviceConfigurations')));
-  assert.ok(Object.keys(tables).some((logicalId) => logicalId.startsWith('Programmes')));
-  assert.ok(Object.keys(tables).some((logicalId) => logicalId.startsWith('DisplayAssets')));
-  assert.ok(Object.keys(tables).some((logicalId) => logicalId.startsWith('ContentItems')));
-  assert.equal(Object.keys(tables).length, 5);
+  assert.ok(
+    Object.keys(tables).some((logicalId) =>
+      logicalId.startsWith('DeviceConfigurations'),
+    ),
+  );
+  assert.ok(
+    Object.keys(tables).some((logicalId) => logicalId.startsWith('Programmes')),
+  );
+  assert.ok(
+    Object.keys(tables).some((logicalId) =>
+      logicalId.startsWith('DisplayAssets'),
+    ),
+  );
+  assert.ok(
+    Object.keys(tables).some((logicalId) =>
+      logicalId.startsWith('ContentItems'),
+    ),
+  );
+  assert.ok(
+    Object.keys(tables).some((logicalId) =>
+      logicalId.startsWith('ControlSessions'),
+    ),
+  );
+  template.hasResourceProperties('AWS::DynamoDB::Table', {
+    TimeToLiveSpecification: { AttributeName: 'expiresAt', Enabled: true },
+  });
+  assert.equal(Object.keys(tables).length, 6);
+  template.hasResourceProperties('AWS::Cognito::UserPool', {
+    AdminCreateUserConfig: { AllowAdminCreateUserOnly: true },
+    DeletionProtection: 'ACTIVE',
+    UserPoolTier: 'ESSENTIALS',
+  });
+  template.hasResourceProperties('AWS::Cognito::UserPoolClient', {
+    ExplicitAuthFlows: Match.arrayWith(['ALLOW_USER_AUTH']),
+    GenerateSecret: false,
+    RefreshTokenValidity: 90,
+  });
 });

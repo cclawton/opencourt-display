@@ -8,15 +8,18 @@
     "seed": "node scripts/put-device-config.mjs",
     "seed-programmes": "node scripts/put-programmes.mjs",
     "migrate-content": "node scripts/migrate-content.mjs",
+    "seed-legacy-schedule": "node scripts/seed-legacy-schedule.mjs",
     "test": "npm run build --silent && node --test test/*.test.mjs",
     "synth": "cdk synth"
   },
   "dependencies": {
+    "@aws-sdk/client-cognito-identity-provider": "^3.1145.0",
     "@aws-sdk/client-dynamodb": "^3.883.0",
     "@aws-sdk/client-s3": "^3.883.0",
     "@aws-sdk/lib-dynamodb": "^3.883.0",
     "@aws-sdk/s3-request-presigner": "^3.883.0",
     "aws-cdk-lib": "2.271.0",
+    "aws-jwt-verify": "^5.2.1",
     "constructs": "10.8.1",
     "google-auth-library": "^10.5.0"
   },

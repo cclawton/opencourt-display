@@ -51,3 +51,8 @@ infra/dist/
 .DS_Store
 deploy/pi-live/honours-board.jpg
 /heatherdale-honours-board-3840x2160.jpg
+
+# Browser test artifacts (may contain deployment URLs)
+/playwright-report/
+/test-results/
+*.tsbuildinfo
