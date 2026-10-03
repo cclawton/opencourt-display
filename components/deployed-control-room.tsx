@@ -1,5 +1,7 @@
 'use client';
 
+/* oxlint-disable next/no-img-element -- the club logo is a small versioned Vite static asset, so framework image optimisation does not apply. */
+
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import {
   CalendarDays,
@@ -579,13 +581,18 @@ export function DeployedControlRoom({ config }: { config: RuntimeConfig }) {
       <header className="border-b border-black/10 bg-court-ink text-white">
         <div className="mx-auto flex max-w-5xl items-center justify-between gap-4 px-4 py-4 sm:px-6">
           <div className="flex items-center gap-3">
-            <div className="grid size-9 place-items-center rounded-full bg-tennis text-sm font-black text-court-ink">
-              OC
+            <div className="rounded-lg bg-white px-2 py-1 shadow-sm">
+              <img
+                alt="Heatherdale Tennis Club"
+                className="h-10 w-auto sm:h-12"
+                height="114"
+                src="/heatherdale-tennis-club.png"
+                width="342"
+              />
             </div>
-            <div>
-              <p className="font-display font-bold">OpenCourt</p>
-              <p className="text-xs text-white/55">Heatherdale Tennis Club</p>
-            </div>
+            <p className="hidden text-sm font-bold text-white/70 sm:block">
+              OpenCourt Control
+            </p>
           </div>
           <Button
             className="border-white/20 bg-transparent text-white hover:bg-white/10"

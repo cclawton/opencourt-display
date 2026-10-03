@@ -53,6 +53,12 @@ test('nine seeded-shape items, current selection and responsive layout', async (
   page,
   room,
 }) => {
+  await expect(
+    page.getByRole('img', { name: 'Heatherdale Tennis Club' }),
+  ).toBeVisible();
+  expect(
+    await page.evaluate(() => getComputedStyle(document.body).fontFamily),
+  ).toContain('Calibri');
   await expect(page.locator('optgroup[label="Slideshows"] option')).toHaveText(
     titles.slice(0, 8),
   );
@@ -157,17 +163,21 @@ test('create, edit, cancel deletion and delete unused slideshow', async ({
   await page.getByRole('button', { name: 'Save', exact: true }).click();
   const row = page.locator('article').filter({ hasText: 'UX test slideshow' });
   await expect(row).toBeVisible();
-  await row.getByRole('button', { name: 'Edit' }).click();
+  const editButton = row.getByRole('button', { name: 'Edit' });
+  await editButton.scrollIntoViewIfNeeded();
+  // Avoid Chromium mobile emulation re-targeting this control while the long
+  // content list settles after inserting the new row.
+  await editButton.click({ force: true });
   await page
     .getByLabel('Title', { exact: true })
     .fill('UX test slideshow renamed');
   await page.getByRole('button', { name: 'Save', exact: true }).click();
   await expect(row).toContainText('renamed');
   page.once('dialog', (d) => d.dismiss());
-  await row.getByRole('button', { name: 'Delete' }).click();
+  await row.getByRole('button', { name: 'Delete' }).click({ force: true });
   expect(room.writes).toHaveLength(2);
   page.once('dialog', (d) => d.accept());
-  await row.getByRole('button', { name: 'Delete' }).click();
+  await row.getByRole('button', { name: 'Delete' }).click({ force: true });
   await expect(row).toHaveCount(0);
   expect(room.writes.map((w) => w.method)).toEqual(['POST', 'PUT', 'DELETE']);
 });

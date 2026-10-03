@@ -24,8 +24,8 @@
   --color-club-gold: var(--club-gold);
   --color-tennis: var(--tennis);
   --color-display: var(--display);
-  --font-sans: var(--font-geist-sans);
-  --font-display: var(--font-geist-sans);
+  --font-sans: Calibri, Carlito, 'Segoe UI', Arial, sans-serif;
+  --font-display: Calibri, Carlito, 'Segoe UI', Arial, sans-serif;
   --radius-sm: 0.4rem;
   --radius-md: 0.6rem;
   --radius-lg: 0.8rem;
@@ -54,13 +54,26 @@
   --display: #fffef9;
 }
 
-* { box-sizing: border-box; }
+* {
+  box-sizing: border-box;
+}
 
 html {
   background: var(--court-ink);
-  font-family: var(--font-geist-sans), Arial, Helvetica, sans-serif;
+  font-family: Calibri, Carlito, 'Segoe UI', Arial, sans-serif;
 }
 
-body { margin: 0; min-width: 320px; }
-button, input, select, textarea { font: inherit; }
-::selection { background: var(--tennis); color: var(--court-ink); }
+body {
+  margin: 0;
+  min-width: 320px;
+}
+button,
+input,
+select,
+textarea {
+  font: inherit;
+}
+::selection {
+  background: var(--tennis);
+  color: var(--court-ink);
+}
