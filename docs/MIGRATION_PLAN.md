@@ -8,9 +8,9 @@ Build the new Raspberry Pi as the first appliance running the shared display sof
 
 After acceptance, flash a separate card for the existing Pi and run the same software on both devices with different device profiles:
 
-| Device profile | Normal content | Optional override/test content |
-| --- | --- | --- |
-| `honours-board-tv` | Native 3840×2160 honours board | Court-allocation programmes |
+| Device profile        | Normal content                            | Optional override/test content |
+| --------------------- | ----------------------------------------- | ------------------------------ |
+| `honours-board-tv`    | Native 3840×2160 honours board            | Court-allocation programmes    |
 | `court-allocation-tv` | Scheduled Google Slides court allocations | One-off event or honours board |
 
 The new TV normally shows only the honours board. Court allocations on that TV are an administrator-selected **test or override** during coexistence, not an automatic rotation. An authorised committee member can select the court display for a test and then use **Return to schedule** to restore the honours board.
@@ -154,9 +154,9 @@ The current laptop prototype uses `vinext`, Wrangler and a Cloudflare-specific V
 - Test preview, show-now, return-to-schedule and refresh operations.
 - Apply request limits, audit logging, backups, AWS Budgets and low-value billing alerts.
 
-#### Phase 3 implementation status — 27 September 2026
+#### Phase 3 implementation status — 3 October 2026
 
-- Added and synthesized the isolated AWS CDK package in `infra/` for Sydney (`ap-southeast-2`). It defines pay-per-request DynamoDB tables, a 128 MB ARM Lambda with reserved concurrency of two, a public read-only device route plus Google ID-token-protected admin actions, a retained audit trail, a private S3/CloudFront control room, seven-day logs and mandatory actual-cost alerts at USD $1, $5 and $10.
+- Deployed the isolated AWS CDK package in `infra/` to Sydney (`ap-southeast-2`). It defines pay-per-request DynamoDB tables, a 128 MB ARM Lambda with reserved concurrency of ten, public read-only device configuration, authenticated Google administrator and Cognito convenor actions, a retained audit trail, a private S3/CloudFront control room, seven-day logs and mandatory actual-cost alerts at USD $1, $5 and $10. The cap was raised from five after release-test traffic coincided with a convenor login and produced three Lambda throttles; reserved concurrency has no additional standing charge.
 - Added public configuration projection, ETag/304 handling, malformed-path handling and contract tests. The public route cannot write; authenticated administrator routes receive only the narrow DynamoDB and S3 permissions needed for device actions and image upload verification.
 - Added guarded local seed commands that validate image/Google Slides providers and programme metadata. Device changes use strictly newer revisions; authenticated control-room changes write the device update and audit event atomically.
 - Parameterised the club, stage and operational owner; added account-migration tags and deletion protection; and documented a one-display-at-a-time move to a future club-owned AWS account in `infra/MIGRATION.md`.

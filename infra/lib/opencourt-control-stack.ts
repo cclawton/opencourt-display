@@ -347,7 +347,7 @@ export class OpenCourtControlStack extends cdk.Stack {
       architecture: lambda.Architecture.ARM_64,
       memorySize: 128,
       timeout: cdk.Duration.seconds(5),
-      reservedConcurrentExecutions: 5,
+      reservedConcurrentExecutions: 10,
       environment: {
         DEVICE_CONFIG_TABLE: table.tableName,
         PROGRAMME_TABLE: programmeTable.tableName,

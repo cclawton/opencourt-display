@@ -5,7 +5,7 @@ This package defines the deliberately small AWS control plane selected in [`docs
 The first stack contains:
 
 - a DynamoDB on-demand table keyed by `deviceId`;
-- a 128 MB ARM Lambda with reserved concurrency of five;
+- a 128 MB ARM Lambda with reserved concurrency of ten;
 - an anonymous read-only Function URL at `/devices/{deviceId}/config`;
 - Google ID-token protected committee routes for programme reads and display actions;
 - a Cognito Essentials user pool for passwordless SMS or email codes to at most five competition convenors;
@@ -74,6 +74,8 @@ Do not deploy until the target AWS account and region have been confirmed. After
 The parameters keep resource names and ownership tags portable. The application stack has termination protection, the table is retained and deletion-protected, and the Lambda logs are intentionally short-lived. Bootstrap with termination protection as well. See [MIGRATION.md](MIGRATION.md) for the later move to a club-owned AWS account.
 
 The initial service-family budget filter covers Lambda, DynamoDB, CloudWatch, S3 and CloudFront. In a shared account it can still include another workload using one of those services. Activate the `Application` user-defined cost-allocation tag when it becomes available in Billing, then replace this transitional filter with `user:Application$OpenCourt Display`. AWS may take up to 24 hours to make a newly applied tag available for activation.
+
+Reserved Lambda concurrency is capped at ten. Reserved concurrency itself has no additional charge; OpenCourt continues to pay only for requests and execution duration actually consumed. The cap was raised from five after three synchronous requests were throttled during concurrent browser testing and a convenor login. The higher cap accommodates the two display devices, several users and release tests while retaining a conservative ceiling.
 
 The image feature adds no server or always-on process: it reuses the existing private S3 bucket, CloudFront distribution and on-demand Lambda. Its variable usage is limited to stored image bytes, upload/download requests, a small DynamoDB metadata item and CloudFront transfer. Pending uploads are never listed as selectable. CloudTrail S3 data events can be enabled later if the club needs object-level audit logs, but they are omitted from the tiny-club default to avoid unnecessary logging cost; display changes themselves remain in the retained audit table.
 
