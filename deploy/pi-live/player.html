@@ -17,9 +17,19 @@
 
       img {
         display: block;
+        position: fixed;
+        inset: 0;
+        opacity: 0;
+        transition: opacity 500ms ease-in-out;
         width: 100vw;
         height: 100vh;
         object-fit: contain;
+      }
+
+      img.visible { opacity: 1; }
+
+      @media (prefers-reduced-motion: reduce) {
+        img { transition: none; }
       }
 
       #status {
@@ -75,11 +85,24 @@
           image.src = `${slide.image}?opencourtRevision=${encodeURIComponent(revision)}`;
         }))).then(images => {
           let index = 0;
+          images[0].classList.add("visible");
           document.body.replaceChildren(images[0]);
           if (images.length > 1) {
             setInterval(() => {
+              const previous = images[index];
               index = (index + 1) % images.length;
-              document.body.replaceChildren(images[index]);
+              const next = images[index];
+              next.classList.remove('visible');
+              next.style.zIndex = '1';
+              document.body.append(next);
+              // Keep the previous image opaque underneath: no flash to black.
+              void next.offsetWidth;
+              next.classList.add('visible');
+              setTimeout(() => {
+                previous.remove();
+                previous.classList.remove('visible');
+                next.style.zIndex = '0';
+              }, 550);
             }, duration * 1000);
           }
         }).catch(error => { status.textContent = error.message; });

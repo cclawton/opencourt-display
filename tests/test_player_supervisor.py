@@ -87,9 +87,10 @@ async function run(slides) {
   const context = {
     URLSearchParams, console,
     window: {location: {search: '?' + new URLSearchParams({slides: JSON.stringify(slides.map(image => ({image}))), durationSeconds: '12'})}},
-    document: {querySelector: () => ({}), body: {replaceChildren: image => shown.push(image.src)}},
-    Image: class {set src(value) {this._src = value; loaded.push(this);} get src() {return this._src;}},
+    document: {querySelector: () => ({}), body: {replaceChildren: image => shown.push(image.src), append: image => shown.push(image.src)}},
+    Image: class {constructor() {this.classList = {add() {}, remove() {}}; this.style = {};} remove() {} set src(value) {this._src = value; loaded.push(this);} get src() {return this._src;}},
     setInterval: (callback, delay) => timers.push({callback, delay}),
+    setTimeout: callback => callback(),
   };
   vm.runInNewContext(SCRIPT, context);
   loaded[0].onload();
