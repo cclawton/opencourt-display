@@ -1,6 +1,8 @@
 # OpenCourt Display
 
-OpenCourt Display is an open-source clubhouse signage system for tennis court allocations. Convenors keep preparing content in Google Slides while a Raspberry Pi selects the correct presentation, refreshes it automatically and shows it full-screen on a TV.
+OpenCourt Display is an open-source digital signage platform for sports clubs. Use one control room for honours boards, court or facility allocations, event and sponsor notices, and food/drink prices. Raspberry Pi players show the selected content full-screen on club TVs.
+
+Volunteers can keep using familiar tools such as Google Slides or upload finished images. A club can also add its own editors without putting that club’s specialist code or private records into the public project.
 
 The project began at Heatherdale Tennis Club in Melbourne, Australia, but club names, court counts, schedules and content sources are intentionally configurable.
 
@@ -58,13 +60,40 @@ Agent-assisted AWS work uses the official [Agent Toolkit for AWS](docs/AWS_AGENT
 
 Administrative writes are disabled until the pilot stack is deployed with the club's real Google web client ID and committee email allow-list. Placeholder values deliberately reject every administrator.
 
-## Product model
+## Club use cases
 
-OpenCourt stores **display content**, not competitions. A slideshow represents the complete court allocation for a time window and may contain multiple simultaneous activities. The current content types are Google Slides and still images; the content API deliberately keeps the type/provider boundary open for future channels.
+| Club need | Example content | Typical workflow |
+| --- | --- | --- |
+| Honours and history | Champions, office bearers, club milestones | Prepare an image in an external tool or optional club editor; display it as a still image. |
+| Court and facility allocations | Courts, pitches, rinks, competition sessions | Select a Google Slides presentation or image and schedule it for the relevant session. |
+| Events and marketing | Social events, open days, sponsor artwork | Upload posters; show one image or rotate several on a supported slideshow player. |
+| Food/drink prices | Bar menus, café prices, specials | Prepare readable menu images; show one page or a local image slideshow. |
+| Coaching and junior programmes | Coaching times, holiday clinics | Reuse posters and timetables through the same library and schedules. |
+| Club information | Opening hours, rules, volunteering, wayfinding | Display a stable information image or presentation. |
+| Fixtures, results and notices | Match notices, results, committee announcements | Upload approved artwork or use Google Slides; review it when details change. |
 
-See [Architecture](docs/ARCHITECTURE.md), [MVP scope](docs/MVP.md) and [Backlog](BACKLOG.md).
+These uses share **Displays**, **Content** and **Schedule**. A TV’s name describes its location or purpose; it does not require a different player application. OpenCourt displays information; bookings, payments, stock control and membership management remain in their own systems. Automated feeds, content expiry, mixed-media playlists and a general page designer are not promised features.
 
-The staged Heatherdale rollout, including the new 4K honours-board Pi, coexistence with the legacy court Pi, today's card-flashing checklist and cloud cost guardrails, is documented in the [display migration plan](docs/MIGRATION_PLAN.md).
+See [Club signage workflows](docs/CLUB_USE_CASES.md) for volunteer-facing examples and the current delivery status.
+
+## Shared platform and optional club extensions
+
+The public platform owns the content library, display selection, scheduling, permissions and playback. A club may maintain specialist editors in a separate repository and include them in its own build. Other clubs can use OpenCourt without installing those editors.
+
+The extension model being tested keeps authoring and publishing explicit:
+
+1. Edit in the club’s optional editor and save the editable source there.
+2. Download image(s).
+3. Upload the image(s) in generic **Content**, as a single image or an image slideshow on a supported player.
+4. Select the content for a display, or assign it through Schedule.
+
+Saving a club editor does not change a TV. The generic player receives display images, not private editor records. For example, one club can privately maintain honours-board and food/drink prices editors while contributing player and slideshow improvements to OpenCourt for everyone.
+
+**Development status:** Google Slides and single images are in the published core. Local image slideshows and the optional extension hooks have been implemented and tested in the development checkout and an isolated club test deployment; their core implementation has not yet been committed or published here. Existing players need the supporting software before receiving an image slideshow. The documentation describes that developing model, not a released plugin SDK.
+
+See [Club extension model](docs/CLUB_EXTENSIONS.md) for repository ownership, frontend/backend composition, privacy boundaries and release compatibility.
+
+See also [Architecture](docs/ARCHITECTURE.md), [MVP scope](docs/MVP.md) and [Backlog](BACKLOG.md). Older planning documents describe the original court-allocation scope and should be read alongside the broader use cases above.
 
 ## Security and clean-room development
 
