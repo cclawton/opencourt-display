@@ -1,6 +1,6 @@
 # Optional club extensions
 
-Status: implemented in the development checkout and an isolated club test deployment. The generic hooks and local slideshow implementation are not yet published in this repository. This is a small composition interface under development, not a stable plugin SDK or extension marketplace.
+Status: implemented in the development checkout and an isolated club test deployment. The generic hooks and local slideshow implementation are checkpointed on `codex/local-slideshow-club-extensions`; they have not been merged into `main` or released. This is a small composition interface under development, not a stable plugin SDK or extension marketplace.
 
 ## Ownership and repositories
 

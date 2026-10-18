@@ -29,6 +29,7 @@ Admin routes are:
 - `GET /admin/devices/{deviceId}`
 - `POST /admin/devices/{deviceId}/actions` with `show_content` or `refresh` for the current control room. Legacy programme/image actions remain during migration and rollback.
 - `GET`, `POST` and `DELETE /admin/convenors[/<username>]` for Google administrators to manage the five-user convenor list.
+- An optional authenticated administrator extension hook for separately packaged club tools.
 
 Convenors can request a Cognito passwordless code by SMS or email. SMS delivery uses AWS End User Messaging and email delivery uses Amazon SES. Both channels remain sandboxed until their respective production-access requests are approved. In the pilot, SMS can reach verified destination numbers and SES can send only from and to verified identities. Keep the account messaging spend limits and stack budget alerts low.
 
@@ -82,6 +83,8 @@ The operations dashboard uses five standard Lambda metrics and adds no custom me
 
 The image feature adds no server or always-on process: it reuses the existing private S3 bucket, CloudFront distribution and on-demand Lambda. Its variable usage is limited to stored image bytes, upload/download requests, a small DynamoDB metadata item and CloudFront transfer. Pending uploads are never listed as selectable. CloudTrail S3 data events can be enabled later if the club needs object-level audit logs, but they are omitted from the tiny-club default to avoid unnecessary logging cost; display changes themselves remain in the retained audit table.
 
+Club-specific editors and their data resources are supplied by a private deployment composition, not the generic stack. The stack accepts an optional API entry, import aliases and resource callback; the callback receives the original stack scope so retained resource identities can be preserved. Existing installations with private extensions must use that private composition and its backup/restore wrapper. Never deploy the generic template over an existing extension installation without reviewing the complete resource changes.
+
 The initial seed is a local administrative action, not a public API. After deploying the updated stack, migrate the retained device/programme/image records into the content table:
 
 ```bash
@@ -133,3 +136,5 @@ npm run seed-legacy-schedule -- \
 ```
 
 The seed writes a strictly newer device revision and is intentionally not idempotent. Run it once, then use the Schedule page for future edits.
+
+Test deployments (`DeploymentStage=test`) reuse the supplied SES email identities already verified in the same account and region. They do not create, verify or own duplicate identities. Pilot/production retain their original SES resources. `EnableConvenorEmailOtp=true` remains a separate explicit choice after verification; it is not enabled automatically for test stacks.

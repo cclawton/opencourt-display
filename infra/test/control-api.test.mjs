@@ -229,6 +229,7 @@ test('requires a bearer credential for every admin route', async () => {
     401,
   );
   assert.equal((await handler(event('/admin/content'))).statusCode, 401);
+  assert.equal((await handler(event('/admin/honours-board'))).statusCode, 401);
 });
 
 test('limits convenors to display and schedule management', async () => {
@@ -272,6 +273,10 @@ test('limits convenors to display and schedule management', async () => {
     403,
   );
   assert.equal(
+    (await handler(event('/admin/honours-board', headers))).statusCode,
+    403,
+  );
+  assert.equal(
     (
       await handler(
         event('/admin/devices/honours-board-tv/actions', headers, 'POST', {
@@ -308,6 +313,10 @@ test('lists public names and lets admins manage no more than five convenors', as
   let created;
   const handler = createHandler(
     dependencies({
+      listAdministrators: async () => [
+        { email: 'admin-one@example.test' },
+        { email: 'admin-two@example.test' },
+      ],
       listConvenors: async () => users,
       createConvenor: async (value) => {
         created = value;
@@ -322,6 +331,25 @@ test('lists public names and lets admins manage no more than five convenors', as
         username: 'convenor_1',
         name: 'Craig',
         deliveryMethods: ['sms', 'email'],
+      },
+    ],
+  });
+  const adminResult = await handler(
+    event('/admin/convenors', { authorization: 'Bearer valid-token' }),
+  );
+  assert.deepEqual(JSON.parse(adminResult.body), {
+    administrators: [
+      { email: 'admin-one@example.test' },
+      { email: 'admin-two@example.test' },
+    ],
+    convenors: [
+      {
+        username: 'convenor_1',
+        name: 'Craig',
+        phoneNumber: '+61404198867',
+        email: 'craig@example.test',
+        deliveryMethods: ['sms', 'email'],
+        enabled: true,
       },
     ],
   });
@@ -895,4 +923,470 @@ test('seed validation accepts safe providers and rejects unsafe input', () => {
       }),
     /Google Slides URL/,
   );
+});
+
+const imageContent = {
+  ...content,
+  contentId: 'menu-image',
+  type: 'image',
+  source: { type: 'image', url: 'menu.png' },
+};
+const imageSlideshow = {
+  ...content,
+  contentId: 'bar-menu',
+  type: 'image_slideshow',
+  provider: 'uploaded_images',
+  source: {
+    type: 'image_slideshow',
+    durationSeconds: 15,
+    slides: [imageContent.source],
+  },
+};
+const adminHeaders = { authorization: 'Bearer valid-token' };
+
+test('creates an image slideshow from ready uploaded images, preserving order and immutable sources', async () => {
+  let saved;
+  const result = await createHandler(
+    dependencies({
+      getContent: async (id) => ({
+        ...imageContent,
+        contentId: id,
+        source: { type: 'image', url: `${id}.png` },
+      }),
+      putContent: async (value) => {
+        saved = value;
+      },
+    }),
+  )(
+    event('/admin/content', adminHeaders, 'POST', {
+      type: 'image_slideshow',
+      title: 'Bar prices',
+      imageContentIds: ['wine', 'beer'],
+      durationSeconds: 15,
+    }),
+  );
+  assert.equal(result.statusCode, 201);
+  assert.deepEqual(
+    saved.source.slides.map((slide) => slide.url),
+    ['wine.png', 'beer.png'],
+  );
+  assert.deepEqual(
+    saved.source.slides.map((slide) => slide.contentId),
+    ['wine', 'beer'],
+  );
+});
+
+test('rejects invalid slideshow duration, empty slides and non-image content', async () => {
+  for (const values of [
+    { imageContentIds: [], durationSeconds: 15 },
+    { imageContentIds: ['wine'], durationSeconds: 2 },
+    { imageContentIds: ['wine'], durationSeconds: 15 },
+  ]) {
+    const result = await createHandler(dependencies())(
+      event('/admin/content', adminHeaders, 'POST', {
+        type: 'image_slideshow',
+        title: 'Bar prices',
+        ...values,
+      }),
+    );
+    assert.equal(result.statusCode, 400);
+  }
+});
+
+test('protects old displays from direct slideshow selection and accepts capable displays', async () => {
+  for (const capable of [false, true]) {
+    let writes = 0;
+    const result = await createHandler(
+      dependencies({
+        getContent: async () => imageSlideshow,
+        getDevice: async () => ({
+          ...item,
+          name: 'Kitchen TV',
+          ...(capable
+            ? { diagnostics: { capabilities: { local_image_slideshow: 1 } } }
+            : {}),
+        }),
+        updateDevice: async () => {
+          writes++;
+        },
+      }),
+    )(
+      event('/admin/devices/honours-board-tv/actions', adminHeaders, 'POST', {
+        action: 'show_content',
+        contentId: 'bar-menu',
+      }),
+    );
+    assert.equal(result.statusCode, capable ? 200 : 409);
+    assert.equal(writes, capable ? 1 : 0);
+    if (!capable)
+      assert.match(
+        JSON.parse(result.body).error,
+        /Kitchen TV cannot show image slideshows yet/,
+      );
+  }
+});
+
+test('protects old displays from slideshow schedules, return-to-schedule and referenced edits', async () => {
+  let writes = 0;
+  const schedule = {
+    fallback: { contentId: 'bar-menu', source: imageSlideshow.source },
+    entries: [],
+  };
+  const handler = createHandler(
+    dependencies({
+      getContent: async () => imageSlideshow,
+      getDevice: async () => ({ ...item, schedule }),
+      listDevices: async () => [{ ...item, schedule }],
+      updateDevice: async () => {
+        writes++;
+      },
+      putContent: async () => {
+        writes++;
+      },
+    }),
+  );
+  for (const [path, method, body] of [
+    [
+      '/admin/devices/honours-board-tv/schedule',
+      'PUT',
+      { fallbackContentId: 'bar-menu', entries: [] },
+    ],
+    [
+      '/admin/devices/honours-board-tv/actions',
+      'POST',
+      { action: 'return_to_schedule' },
+    ],
+  ]) {
+    const result = await handler(event(path, adminHeaders, method, body));
+    assert.equal(result.statusCode, 409);
+  }
+  const editHandler = createHandler(
+    dependencies({
+      getContent: async (id) =>
+        id === 'bar-menu' ? imageSlideshow : imageContent,
+      listDevices: async () => [{ ...item, schedule }],
+      putContent: async () => {
+        writes++;
+      },
+    }),
+  );
+  const result = await editHandler(
+    event('/admin/content/bar-menu', adminHeaders, 'PUT', {
+      title: 'Bar prices',
+      imageContentIds: ['menu-image'],
+      durationSeconds: 15,
+    }),
+  );
+  assert.equal(result.statusCode, 409);
+  assert.equal(writes, 0);
+});
+
+test('uses deployment display names for legacy records without changing their configuration', async () => {
+  const previous = process.env.DEVICE_DISPLAY_NAMES;
+  process.env.DEVICE_DISPLAY_NAMES = JSON.stringify({
+    'honours-board-tv': 'Bar Room TV',
+  });
+  try {
+    const result = await createHandler(
+      dependencies({ getContent: async () => imageSlideshow }),
+    )(
+      event('/admin/devices/honours-board-tv/actions', adminHeaders, 'POST', {
+        action: 'show_content',
+        contentId: 'bar-menu',
+      }),
+    );
+    assert.equal(result.statusCode, 409);
+    assert.match(
+      JSON.parse(result.body).error,
+      /^Bar Room TV cannot show image slideshows yet/,
+    );
+    assert.equal(item.name, undefined);
+  } finally {
+    if (previous === undefined) delete process.env.DEVICE_DISPLAY_NAMES;
+    else process.env.DEVICE_DISPLAY_NAMES = previous;
+  }
+});
+
+test('public slideshow configuration excludes private device and author metadata', async () => {
+  const configured = {
+    ...item,
+    source: imageSlideshow.source,
+    credentials: 'secret',
+    capabilities: { local_image_slideshow: 1 },
+    diagnostics: { private: 'private' },
+    tokenHash: 'private',
+    updatedBy: 'private',
+  };
+  const result = await createHandler(
+    dependencies({ getDevice: async () => configured }),
+  )(event('/devices/honours-board-tv/config'));
+  const body = JSON.parse(result.body);
+  assert.equal(result.statusCode, 200);
+  assert.deepEqual(
+    Object.keys(body).sort(),
+    [
+      'schemaVersion',
+      'deviceId',
+      'revision',
+      'pollIntervalSeconds',
+      'source',
+      'mode',
+      'schedule',
+    ].sort(),
+  );
+  assert.equal(body.source.type, 'image_slideshow');
+});
+
+test('rejects a slideshow exceeding the player image-memory safety budget', async () => {
+  const result = await createHandler(
+    dependencies({
+      getContent: async (id) => ({
+        ...imageContent,
+        contentId: id,
+        width: 3840,
+        height: 2160,
+        source: { type: 'image', url: `${id}.png` },
+      }),
+    }),
+  )(
+    event('/admin/content', adminHeaders, 'POST', {
+      type: 'image_slideshow',
+      title: 'Large slideshow',
+      imageContentIds: Array.from(
+        { length: 8 },
+        (_, index) => `image-${index}`,
+      ),
+      durationSeconds: 15,
+    }),
+  );
+  assert.equal(result.statusCode, 400);
+  assert.match(
+    JSON.parse(result.body).error,
+    /too large for reliable playback/,
+  );
+});
+
+test('protects a library image used by a saved image slideshow', async () => {
+  let deleted = false;
+  const handler = createHandler(
+    dependencies({
+      getContent: async () => imageContent,
+      listDevices: async () => [],
+      listContent: async () => [
+        {
+          ...imageSlideshow,
+          source: {
+            ...imageSlideshow.source,
+            slides: [{ ...imageContent.source, contentId: 'menu-image' }],
+          },
+        },
+      ],
+      deleteContent: async () => {
+        deleted = true;
+      },
+    }),
+  );
+  const result = await handler(
+    event('/admin/content/menu-image', adminHeaders, 'DELETE'),
+  );
+  assert.equal(result.statusCode, 409);
+  assert.match(JSON.parse(result.body).error, /used in an image slideshow/);
+  assert.equal(deleted, false);
+});
+
+test('administrator extensions never run for convenor reads of generic content', async () => {
+  let called = false;
+  const handler = createHandler(
+    dependencies({
+      verifyToken: async () => ({
+        role: 'convenor',
+        email: 'convenor@example.test',
+      }),
+      adminExtension: async () => {
+        called = true;
+        return { statusCode: 200, body: { private: true } };
+      },
+    }),
+  );
+  const result = await handler(event('/admin/content', adminHeaders));
+  assert.equal(result.statusCode, 200);
+  assert.equal(called, false);
+});
+
+test('rejects a schedule whose individually valid slideshows exceed the combined image budget', async () => {
+  let writes = 0;
+  const makeShow = (name) => ({
+    ...imageSlideshow,
+    contentId: name,
+    source: {
+      type: 'image_slideshow',
+      durationSeconds: 15,
+      slides: Array.from({ length: 4 }, (_, index) => ({
+        type: 'image',
+        url: `${name}-${index}.png`,
+        expectedWidth: 3840,
+        expectedHeight: 2160,
+        byteSize: 1000000,
+      })),
+    },
+  });
+  const shows = new Map(
+    ['morning', 'evening'].map((name) => [name, makeShow(name)]),
+  );
+  const handler = createHandler(
+    dependencies({
+      getDevice: async () => ({
+        ...item,
+        source: programme.source,
+        capabilities: { local_image_slideshow: 1 },
+      }),
+      getContent: async (id) => shows.get(id),
+      updateDevice: async () => {
+        writes++;
+      },
+    }),
+  );
+  const result = await handler(
+    event('/admin/devices/honours-board-tv/schedule', adminHeaders, 'PUT', {
+      fallbackContentId: 'morning',
+      entries: [
+        {
+          day: 'Monday',
+          startTime: '09:00',
+          endTime: '12:00',
+          contentId: 'evening',
+        },
+      ],
+    }),
+  );
+  assert.equal(result.statusCode, 400);
+  assert.match(
+    JSON.parse(result.body).error,
+    /combined images.*reduce the images/,
+  );
+  assert.equal(writes, 0);
+});
+
+test('counts repeated schedule images once and checks direct actions against saved schedule assets', async () => {
+  const source = {
+    type: 'image_slideshow',
+    durationSeconds: 15,
+    slides: Array.from({ length: 4 }, (_, index) => ({
+      type: 'image',
+      url: `shared-${index}.png`,
+      sha256: 'a'.repeat(64),
+      expectedWidth: 3840,
+      expectedHeight: 2160,
+      byteSize: 15000000,
+    })),
+  };
+  const show = { ...imageSlideshow, source };
+  let writes = 0;
+  const handler = createHandler(
+    dependencies({
+      getDevice: async () => ({
+        ...item,
+        source,
+        capabilities: { local_image_slideshow: 1 },
+        schedule: { fallback: { source }, entries: [{ source }] },
+      }),
+      getContent: async () => show,
+      updateDevice: async () => {
+        writes++;
+      },
+    }),
+  );
+  assert.equal(
+    (
+      await handler(
+        event('/admin/devices/honours-board-tv/actions', adminHeaders, 'POST', {
+          action: 'show_content',
+          contentId: 'bar-menu',
+        }),
+      )
+    ).statusCode,
+    200,
+  );
+  assert.equal(writes, 1);
+  const incompatible = createHandler(
+    dependencies({
+      getDevice: async () => ({
+        ...item,
+        source: programme.source,
+        capabilities: { local_image_slideshow: 1 },
+        schedule: { fallback: { source }, entries: [] },
+      }),
+      getContent: async () => ({
+        ...show,
+        source: {
+          ...source,
+          slides: source.slides.map((slide) => ({
+            ...slide,
+            url: `new-${slide.url}`,
+          })),
+        },
+      }),
+      updateDevice: async () => {
+        writes++;
+      },
+    }),
+  );
+  assert.equal(
+    (
+      await incompatible(
+        event('/admin/devices/honours-board-tv/actions', adminHeaders, 'POST', {
+          action: 'show_content',
+          contentId: 'bar-menu',
+        }),
+      )
+    ).statusCode,
+    400,
+  );
+  assert.equal(writes, 1);
+});
+
+test('rejects combined encoded asset bytes even when decoded dimensions are small', async () => {
+  const show = (id) => ({
+    ...imageSlideshow,
+    contentId: id,
+    source: {
+      type: 'image_slideshow',
+      durationSeconds: 15,
+      slides: Array.from({ length: 3 }, (_, index) => ({
+        type: 'image',
+        url: `${id}-${index}.png`,
+        expectedWidth: 1000,
+        expectedHeight: 1000,
+        byteSize: 20 * 1024 * 1024,
+      })),
+    },
+  });
+  let writes = 0;
+  const handler = createHandler(
+    dependencies({
+      getDevice: async () => ({
+        ...item,
+        capabilities: { local_image_slideshow: 1 },
+      }),
+      getContent: async (id) => show(id),
+      updateDevice: async () => {
+        writes++;
+      },
+    }),
+  );
+  const result = await handler(
+    event('/admin/devices/honours-board-tv/schedule', adminHeaders, 'PUT', {
+      fallbackContentId: 'fallback',
+      entries: [
+        {
+          day: 'Monday',
+          startTime: '09:00',
+          endTime: '12:00',
+          contentId: 'other',
+        },
+      ],
+    }),
+  );
+  assert.equal(result.statusCode, 400);
+  assert.equal(writes, 0);
 });

@@ -1127,7 +1127,8 @@ function ControlView({
                     const isFourK =
                       asset.width === 3840 && asset.height === 2160;
                     const isActive =
-                      remoteDevice?.source.url === asset.publicUrl;
+                      remoteDevice?.source.type === 'image' &&
+                      remoteDevice.source.url === asset.publicUrl;
                     return (
                       <article
                         className={`overflow-hidden rounded-xl border ${isActive ? 'border-club-green ring-2 ring-club-green/15' : 'border-black/10'}`}

@@ -24,6 +24,22 @@ export const DATA_KEYS = {
   contentItems: ['contentId'],
 };
 
+// Private distributions supply their additional retained data schema before import.
+const additionalTables = JSON.parse(process.env.OPENCOURT_DATA_TABLES ?? '{}');
+for (const [name, definition] of Object.entries(additionalTables)) {
+  if (
+    !/^[A-Za-z][A-Za-z0-9]*$/.test(name) ||
+    DATA_OUTPUTS[name] ||
+    !/^[A-Za-z][A-Za-z0-9]*$/.test(definition.output ?? '') ||
+    !Array.isArray(definition.keys) ||
+    definition.keys.length < 1 ||
+    definition.keys.some((key) => !/^[A-Za-z][A-Za-z0-9]*$/.test(key))
+  )
+    throw new Error('Invalid additional backup table schema.');
+  DATA_OUTPUTS[name] = definition.output;
+  DATA_KEYS[name] = definition.keys;
+}
+
 export function option(argv, name) {
   const index = argv.indexOf(name);
   return index === -1 ? undefined : argv[index + 1];

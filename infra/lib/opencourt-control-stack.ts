@@ -15,8 +15,28 @@ import * as s3 from 'aws-cdk-lib/aws-s3';
 import * as ses from 'aws-cdk-lib/aws-ses';
 import type { Construct } from 'constructs';
 
+export type OpenCourtExtensionContext = {
+  stack: cdk.Stack;
+  controlApi: lambdaNodejs.NodejsFunction;
+  resourcePrefix: string;
+};
+
+export interface OpenCourtControlStackProps extends cdk.StackProps {
+  defaultDeploymentStage?: 'test' | 'pilot' | 'production';
+  /** Private deployments may substitute an entry that composes the public API. */
+  apiEntry?: string;
+  apiAliases?: Record<string, string>;
+  apiProjectRoot?: string;
+  apiLockFile?: string;
+  extend?: (context: OpenCourtExtensionContext) => void;
+}
+
 export class OpenCourtControlStack extends cdk.Stack {
-  constructor(scope: Construct, id: string, props?: cdk.StackProps) {
+  constructor(
+    scope: Construct,
+    id: string,
+    props?: OpenCourtControlStackProps,
+  ) {
     super(scope, id, props);
 
     const billingAlertEmail = new cdk.CfnParameter(this, 'BillingAlertEmail', {
@@ -38,9 +58,9 @@ export class OpenCourtControlStack extends cdk.Stack {
 
     const deploymentStage = new cdk.CfnParameter(this, 'DeploymentStage', {
       type: 'String',
-      default: 'pilot',
+      default: props?.defaultDeploymentStage ?? 'pilot',
       description: 'Lifecycle stage for this deployment.',
-      allowedValues: ['pilot', 'production'],
+      allowedValues: ['test', 'pilot', 'production'],
     });
 
     const deploymentOwner = new cdk.CfnParameter(this, 'DeploymentOwner', {
@@ -133,6 +153,18 @@ export class OpenCourtControlStack extends cdk.Stack {
       },
     );
 
+    // SES email identities are account/region scoped. Test stacks reuse the
+    // verified pilot identities rather than trying to own duplicate addresses.
+    const createEmailIdentities = new cdk.CfnCondition(
+      this,
+      'ManageEmailIdentities',
+      {
+        expression: cdk.Fn.conditionNot(
+          cdk.Fn.conditionEquals(deploymentStage.valueAsString, 'test'),
+        ),
+      },
+    );
+
     const resourcePrefix = cdk.Fn.join('-', [
       'opencourt',
       clubSlug.valueAsString,
@@ -212,12 +244,27 @@ export class OpenCourtControlStack extends cdk.Stack {
       'EmailOtpSenderIdentity',
       { emailIdentity: emailOtpSender.valueAsString },
     );
-    new ses.CfnEmailIdentity(this, 'EmailOtpSandboxRecipientOneIdentity', {
-      emailIdentity: emailOtpSandboxRecipientOne.valueAsString,
-    });
-    new ses.CfnEmailIdentity(this, 'EmailOtpSandboxRecipientTwoIdentity', {
-      emailIdentity: emailOtpSandboxRecipientTwo.valueAsString,
-    });
+    const recipientOneIdentity = new ses.CfnEmailIdentity(
+      this,
+      'EmailOtpSandboxRecipientOneIdentity',
+      {
+        emailIdentity: emailOtpSandboxRecipientOne.valueAsString,
+      },
+    );
+    const recipientTwoIdentity = new ses.CfnEmailIdentity(
+      this,
+      'EmailOtpSandboxRecipientTwoIdentity',
+      {
+        emailIdentity: emailOtpSandboxRecipientTwo.valueAsString,
+      },
+    );
+    for (const identity of [
+      emailOtpSenderIdentity,
+      recipientOneIdentity,
+      recipientTwoIdentity,
+    ]) {
+      identity.cfnOptions.condition = createEmailIdentities;
+    }
 
     const smsExternalId = cdk.Fn.join('-', [resourcePrefix, 'cognito-sms']);
     const cognitoSmsRole = new iam.Role(this, 'ConvenorSmsRole', {
@@ -267,7 +314,6 @@ export class OpenCourtControlStack extends cdk.Stack {
     convenorPool.addResourceDependency(
       cognitoSmsPolicy.node.defaultChild as iam.CfnPolicy,
     );
-    convenorPool.addResourceDependency(emailOtpSenderIdentity);
     convenorPool.addPropertyOverride(
       'Policies.SignInPolicy.AllowedFirstAuthFactors',
       cdk.Fn.conditionIf(
@@ -290,7 +336,11 @@ export class OpenCourtControlStack extends cdk.Stack {
           SourceArn: this.formatArn({
             service: 'ses',
             resource: 'identity',
-            resourceName: emailOtpSender.valueAsString,
+            resourceName: cdk.Fn.conditionIf(
+              createEmailIdentities.logicalId,
+              emailOtpSenderIdentity.ref,
+              emailOtpSender.valueAsString,
+            ).toString(),
           }),
         },
         { EmailSendingAccount: 'COGNITO_DEFAULT' },
@@ -342,7 +392,15 @@ export class OpenCourtControlStack extends cdk.Stack {
 
     const controlApi = new lambdaNodejs.NodejsFunction(this, 'ControlApi', {
       functionName,
-      entry: path.join(process.cwd(), 'functions/control-api.mjs'),
+      entry:
+        props?.apiEntry ??
+        path.join(process.cwd(), 'functions/control-api.mjs'),
+      ...(props?.apiProjectRoot
+        ? {
+            projectRoot: props.apiProjectRoot,
+            depsLockFilePath: props.apiLockFile,
+          }
+        : {}),
       handler: 'handler',
       runtime: lambda.Runtime.NODEJS_22_X,
       architecture: lambda.Architecture.ARM_64,
@@ -370,6 +428,12 @@ export class OpenCourtControlStack extends cdk.Stack {
       bundling: {
         minify: true,
         sourceMap: false,
+        esbuildArgs: Object.fromEntries(
+          Object.entries(props?.apiAliases ?? {}).map(([alias, target]) => [
+            `--alias:${alias}`,
+            target,
+          ]),
+        ),
       },
     });
     controlApi.node.addDependency(table);
@@ -403,6 +467,7 @@ export class OpenCourtControlStack extends cdk.Stack {
       'dynamodb:DeleteItem',
       'dynamodb:Scan',
     );
+    props?.extend?.({ stack: this, controlApi, resourcePrefix });
     sessionTable.grantReadWriteData(controlApi);
     controlApi.addToRolePolicy(
       new iam.PolicyStatement({

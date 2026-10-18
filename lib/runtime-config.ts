@@ -1,4 +1,5 @@
 export type RuntimeConfig = {
+  environmentLabel?: string;
   apiBaseUrl: string;
   googleClientId: string;
   deviceId: string;
@@ -23,6 +24,7 @@ export function getRuntimeConfig(): RuntimeConfig {
   if (typeof window === 'undefined') return fallback;
   const value = window.OPENCOURT_WEB_CONFIG;
   return {
+    environmentLabel: value?.environmentLabel?.slice(0, 32) ?? '',
     apiBaseUrl: value?.apiBaseUrl?.replace(/\/$/, '') ?? fallback.apiBaseUrl,
     googleClientId: value?.googleClientId ?? fallback.googleClientId,
     deviceId: value?.deviceId ?? fallback.deviceId,

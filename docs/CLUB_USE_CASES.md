@@ -39,8 +39,8 @@ Coaching timetables, junior programme notices, opening hours, facility rules, wa
 | Capability | Published core | Development/test version |
 | --- | --- | --- |
 | Google Slides, still images, content selection and schedules | Available | Retained |
-| Local image slideshow with cached images | Not yet published | Implemented and tested; physical appliance acceptance remains part of rollout |
-| Optional club editor composition | Not yet published | Implemented and tested with separate private club code |
+| Local image slideshow with cached images | Development branch only | Implemented and tested; physical appliance acceptance remains part of rollout |
+| Optional club editor composition | Development branch only | Implemented and tested with separate private club code |
 | Mixed images/Slides/video playlists, automatic expiry, bookings/POS/live-result integrations | Not provided by this work | Future possibilities requiring separate design |
 
 Google Slides needs network access. The developing image slideshow downloads a complete revision before activating it and retains a playable cached revision for offline use, including restart. That does not make outdated prices or allocations current: clubs still own content review.

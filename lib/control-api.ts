@@ -10,18 +10,34 @@ export type RemoteProgramme = {
   activities: string[];
 };
 
+export type ImageSource = {
+  type: 'image';
+  url: string;
+  byteSize?: number;
+  expectedWidth?: number;
+  expectedHeight?: number;
+  sha256?: string;
+  contentId?: string;
+  mimeType?: string;
+};
+export type DisplaySource =
+  | ImageSource
+  | { type: 'google_slides'; url: string }
+  | { type: 'image_slideshow'; slides: ImageSource[]; durationSeconds: number };
+
 export type RemoteDevice = {
+  capabilities?: { local_image_slideshow?: number };
   schemaVersion: number;
   deviceId: string;
   revision: number;
   pollIntervalSeconds: number;
-  source: { type: 'image' | 'google_slides'; url: string };
+  source: DisplaySource;
   activeSelection: {
     kind: string;
     name?: string;
     programmeId?: string;
     contentId?: string;
-    contentType?: 'slideshow' | 'image';
+    contentType?: 'slideshow' | 'image' | 'image_slideshow';
   } | null;
   override: { name: string; programmeId: string; startedAt: string } | null;
   updatedAt: string | null;
@@ -82,10 +98,10 @@ export type RemoteAsset = {
 export type RemoteContent = {
   contentId: string;
   title: string;
-  type: 'slideshow' | 'image';
+  type: 'slideshow' | 'image' | 'image_slideshow';
   provider: string;
   status: 'pending' | 'ready';
-  source: { type: 'image' | 'google_slides'; url: string } | null;
+  source: DisplaySource | null;
   mimeType: 'image/jpeg' | 'image/png' | null;
   byteSize: number | null;
   width: number | null;
@@ -98,6 +114,10 @@ export type ControlActor = {
   name: string;
   email: string;
   role: 'admin' | 'convenor';
+};
+
+export type Administrator = {
+  email: string;
 };
 
 export type Convenor = {
@@ -207,10 +227,12 @@ export async function listPublicConvenors(config: RuntimeConfig) {
   return ((await response.json()) as { convenors: Convenor[] }).convenors;
 }
 
-export async function listConvenors(config: RuntimeConfig, token: string) {
-  return (
-    await request<{ convenors: Convenor[] }>(config, token, '/admin/convenors')
-  ).convenors;
+export async function listManagedUsers(config: RuntimeConfig, token: string) {
+  return request<{ administrators: Administrator[]; convenors: Convenor[] }>(
+    config,
+    token,
+    '/admin/convenors',
+  );
 }
 
 export async function createConvenor(
@@ -350,11 +372,40 @@ export async function createSlideshowContent(
   return response.content;
 }
 
+export async function createImageSlideshowContent(
+  config: RuntimeConfig,
+  token: string,
+  title: string,
+  imageContentIds: string[],
+  durationSeconds: number,
+) {
+  const response = await request<{ content: RemoteContent }>(
+    config,
+    token,
+    '/admin/content',
+    {
+      method: 'POST',
+      body: JSON.stringify({
+        type: 'image_slideshow',
+        title,
+        imageContentIds,
+        durationSeconds,
+      }),
+    },
+  );
+  return response.content;
+}
+
 export async function updateContent(
   config: RuntimeConfig,
   token: string,
   contentId: string,
-  values: { title: string; url?: string },
+  values: {
+    title: string;
+    url?: string;
+    imageContentIds?: string[];
+    durationSeconds?: number;
+  },
 ) {
   const response = await request<{ content: RemoteContent }>(
     config,

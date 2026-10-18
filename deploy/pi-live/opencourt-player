@@ -27,6 +27,9 @@ REMOTE_PATH = Path(os.environ.get("OPENCOURT_REMOTE", CONTENT_DIR / "remote.json
 CHROMIUM = os.environ.get("OPENCOURT_CHROMIUM", "/usr/bin/chromium")
 MAX_CONFIG_BYTES = 128 * 1024
 MAX_IMAGE_BYTES = 20 * 1024 * 1024
+MAX_IMAGE_PIXELS = 16_777_216
+MAX_CONFIG_IMAGE_BYTES = 100 * 1024 * 1024
+MAX_CONFIG_IMAGE_PIXELS = 64_000_000
 ASSET_DIR = CONTENT_DIR / "assets"
 STOP = Event()
 
@@ -173,6 +176,7 @@ def device_diagnostics() -> dict[str, Any]:
         uptime_seconds = 0
     storage = shutil.disk_usage("/")
     return {
+        "capabilities": {"local_image_slideshow": 1},
         "hardware": {
             "model": _read_text("/proc/device-tree/model", platform.machine()),
             "architecture": platform.machine(),
@@ -186,7 +190,7 @@ def device_diagnostics() -> dict[str, Any]:
             "operatingSystem": os_name or platform.system(),
             "kernel": platform.release(),
             "uptimeSeconds": uptime_seconds,
-            "playerVersion": "2026-10-03",
+            "playerVersion": "2026-10-18",
         },
         "network": {"primaryIp": _primary_ip()},
     }
@@ -242,7 +246,7 @@ def fetch_remote_config(
         raise
 
     validate_remote_config(candidate, settings["deviceId"])
-    target_url(candidate)
+    prepare_config(candidate)
     return candidate, response_etag
 
 
@@ -335,6 +339,21 @@ def image_dimensions(payload: bytes) -> tuple[int, int]:
     raise ConfigError("downloaded image is not a supported JPEG or PNG")
 
 
+def validate_image_payload(payload: bytes, source: dict[str, Any]) -> tuple[int, int]:
+    if len(payload) > MAX_IMAGE_BYTES:
+        raise ConfigError("image is too large")
+    width, height = image_dimensions(payload)
+    if width < 1 or height < 1 or width * height > MAX_IMAGE_PIXELS:
+        raise ConfigError("image pixel dimensions exceed player limits")
+    for key, actual in [("expectedWidth", width), ("expectedHeight", height)]:
+        if source.get(key) and actual != int(source[key]):
+            raise ConfigError(f"image {key} {actual} does not match {source[key]}")
+    expected_sha256 = str(source.get("sha256", "")).lower()
+    if expected_sha256 and hashlib.sha256(payload).hexdigest() != expected_sha256:
+        raise ConfigError("image checksum does not match")
+    return width, height
+
+
 def cache_remote_image(
     source: dict[str, Any],
     revision: str,
@@ -348,10 +367,27 @@ def cache_remote_image(
     suffix = Path(parsed.path).suffix.lower()
     if suffix not in {".jpg", ".jpeg", ".png"}:
         raise ConfigError("remote image must be a JPEG or PNG")
-    cache_name = f"{hashlib.sha256(f'{url}|{revision}'.encode()).hexdigest()[:24]}{suffix}"
+    digest = str(source.get("sha256", "")).lower()
+    identity = digest or revision
+    cache_name = f"{hashlib.sha256(f'{url}|{identity}'.encode()).hexdigest()[:24]}{suffix}"
     relative_name = f"assets/{cache_name}"
     target = ASSET_DIR / cache_name
     if target.is_file():
+        with target.open("rb") as cached:
+            validate_image_payload(cached.read(MAX_IMAGE_BYTES + 1), source)
+        return relative_name
+    # Older players keyed by revision. Preserve offline upgrades and rollbacks:
+    # verify and reference that existing file rather than requiring a download.
+    legacy_name = f"{hashlib.sha256(f'{url}|{revision}'.encode()).hexdigest()[:24]}{suffix}"
+    legacy_target = ASSET_DIR / legacy_name
+    if digest and legacy_target.is_file():
+        with legacy_target.open("rb") as cached:
+            payload = cached.read(MAX_IMAGE_BYTES + 1)
+        validate_image_payload(payload, source)
+        temporary = target.with_suffix(f"{target.suffix}.tmp")
+        temporary.write_bytes(payload)
+        temporary.chmod(0o644)
+        temporary.replace(target)
         return relative_name
 
     request = Request(url, headers={"Accept": "image/jpeg,image/png", "User-Agent": "OpenCourt-Display/0.1"})
@@ -367,16 +403,7 @@ def cache_remote_image(
     if len(payload) > MAX_IMAGE_BYTES:
         raise ConfigError("remote image is too large")
 
-    width, height = image_dimensions(payload)
-    expected_width = source.get("expectedWidth")
-    expected_height = source.get("expectedHeight")
-    if expected_width and width != int(expected_width):
-        raise ConfigError(f"remote image width {width} does not match {expected_width}")
-    if expected_height and height != int(expected_height):
-        raise ConfigError(f"remote image height {height} does not match {expected_height}")
-    expected_sha256 = str(source.get("sha256", "")).lower()
-    if expected_sha256 and hashlib.sha256(payload).hexdigest() != expected_sha256:
-        raise ConfigError("remote image checksum does not match")
+    validate_image_payload(payload, source)
 
     ASSET_DIR.mkdir(mode=0o755, parents=True, exist_ok=True)
     temporary = target.with_suffix(f"{target.suffix}.tmp")
@@ -399,6 +426,9 @@ def image_player_url(source: dict[str, Any], revision: str) -> str:
     if CONTENT_DIR.resolve() not in image_path.parents or not image_path.is_file():
         raise ConfigError("configured image does not exist")
 
+    with image_path.open("rb") as image_file:
+        validate_image_payload(image_file.read(MAX_IMAGE_BYTES + 1), source)
+
     player_path = CONTENT_DIR / "player.html"
     if not player_path.is_file():
         raise ConfigError("local image player does not exist")
@@ -415,14 +445,64 @@ def image_player_url(source: dict[str, Any], revision: str) -> str:
     return f"{player_path.as_uri()}?{query}"
 
 
-def target_url(config: dict[str, Any]) -> str:
-    source = scheduled_source(config)
-    revision = str(config["revision"])
+def slideshow_player_url(source: dict[str, Any], revision: str) -> str:
+    slides = source.get("slides")
+    duration = source.get("durationSeconds", 15)
+    if not isinstance(slides, list) or not 1 <= len(slides) <= 50:
+        raise ConfigError("image slideshow must contain 1–50 images")
+    if isinstance(duration, bool) or not isinstance(duration, int) or not 3 <= duration <= 300:
+        raise ConfigError("slide duration must be 3–300 seconds")
+    prepared = []
+    for slide in slides:
+        if not isinstance(slide, dict) or slide.get("type") != "image":
+            raise ConfigError("slideshow slides must be images")
+        # Reuse the single-image path checks, cache, dimensions and checksum checks.
+        query = dict(parse_qsl(urlparse(image_player_url(slide, revision)).query))
+        prepared.append(query)
+    query = urlencode({"slides": json.dumps(prepared, separators=(",", ":")),
+                       "durationSeconds": duration, "revision": revision})
+    return f"{(CONTENT_DIR / 'player.html').as_uri()}?{query}"
+
+
+def source_url(source: dict[str, Any], revision: str) -> str:
     if source.get("type") == "image":
         return image_player_url(source, revision)
+    if source.get("type") == "image_slideshow":
+        return slideshow_player_url(source, revision)
     if source.get("type") == "google_slides":
         return google_slides_url(str(source.get("url", "")))
     raise ConfigError(f"unsupported source type: {source.get('type', 'missing')}")
+
+
+def prepare_config(config: dict[str, Any]) -> None:
+    """Stage every asset before replacing the persisted, playable configuration."""
+    revision = str(config_revision(config))
+    sources = [config["source"]]
+    if config.get("mode", "manual") == "schedule":
+        validate_schedule(config.get("schedule"))
+        sources.append(config["schedule"]["fallback"]["source"])
+        sources.extend(entry["source"] for entry in config["schedule"]["entries"])
+    paths = set()
+    total_bytes = total_pixels = 0
+    for source in sources:
+        source_url(source, revision)
+        images = source.get("slides", []) if source.get("type") == "image_slideshow" else [source] if source.get("type") == "image" else []
+        for image in images:
+            query = dict(parse_qsl(urlparse(image_player_url(image, revision)).query))
+            path = CONTENT_DIR / query["image"]
+            if path not in paths:
+                paths.add(path)
+                with path.open("rb") as image_file:
+                    payload = image_file.read(MAX_IMAGE_BYTES + 1)
+                width, height = validate_image_payload(payload, image)
+                total_bytes += len(payload)
+                total_pixels += width * height
+                if total_bytes > MAX_CONFIG_IMAGE_BYTES or total_pixels > MAX_CONFIG_IMAGE_PIXELS:
+                    raise ConfigError("combined display images exceed player memory/storage limits")
+
+
+def target_url(config: dict[str, Any]) -> str:
+    return source_url(scheduled_source(config), str(config["revision"]))
 
 
 def browser_command(url: str) -> list[str]:
@@ -476,6 +556,7 @@ def main() -> int:
             local_config: dict[str, Any] | None = None
             try:
                 local_config = load_config()
+                prepare_config(local_config)
                 candidate_revision = str(local_config["revision"])
                 candidate_url = target_url(local_config)
                 poll_seconds = max(15, int(local_config.get("pollIntervalSeconds", 60)))
@@ -501,15 +582,17 @@ def main() -> int:
             try:
                 remote_settings = load_remote_settings()
                 if remote_settings:
-                    remote_config, remote_etag = fetch_remote_config(remote_settings, remote_etag)
+                    remote_config, candidate_etag = fetch_remote_config(remote_settings, remote_etag)
                     if remote_config is not None and remote_config != local_config:
                         require_newer_remote_revision(remote_config, local_config)
                         write_config_atomically(remote_config)
+                        remote_etag = candidate_etag
                         print(
                             f"OpenCourt: accepted remote revision {remote_config['revision']}",
                             flush=True,
                         )
                         continue
+                    remote_etag = candidate_etag
                     report_device_status(
                         remote_settings,
                         config_revision(local_config) if local_config else None,

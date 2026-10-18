@@ -54,3 +54,7 @@ After all displays have used the club endpoint successfully for at least seven d
 4. separately remove the retained, deletion-protected DynamoDB table only after the club accepts the migration and a backup is held.
 
 Destroying the stack does not silently delete the configuration table. That is intentional protection against an accidental or premature account migration.
+
+## Private extension data
+
+An installation with private club editors must use its private infrastructure composition and backup/restore wrapper. The generic backup includes only generic tables; private wrappers supply additional table output names and key fields through `OPENCOURT_DATA_TABLES`. Verify that every private table appears in the backup manifest before migration. Keep the private composition’s original stack scope and resource IDs when restoring or updating an existing deployment.

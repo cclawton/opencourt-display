@@ -6,13 +6,15 @@ The installer:
 
 - updates Raspberry Pi OS;
 - installs Chromium, Cage, seatd and a fallback web font;
-- copies a local, original-resolution 3840×2160 honours-board JPEG;
-- installs a small revisioned JSON configuration supporting `image` and `google_slides` sources;
+- copies operator-supplied JPEG/PNG images, when provided;
+- installs a small revisioned JSON configuration supporting `image`, `image_slideshow` and `google_slides` sources;
 - runs a standard-library supervisor that opens Slides as the top-level page and keeps the last valid source when a candidate configuration is invalid;
 - starts the kiosk as the unprivileged `opencourt` user; and
 - supervises it with `systemd` on TTY1.
 
-`honours-board.jpg` is deployment content and is deliberately excluded from Git. Copy the chosen source image into this directory before transferring the payload to a Pi.
+No Heatherdale image is required by the installer. Before transfer, edit `device-config.json` and `remote.json` for the intended device. The checked-in example still references `honours-board.jpg`; replace that source for a new installation. Supply locally referenced JPEG/PNG files in the payload directory (or its `assets/` directory), or use HTTPS image URLs. The installer preserves existing device configuration on subsequent runs. Local filenames should contain only letters, numbers, dots, underscores and hyphens, and start with a letter or number.
+
+A fresh device requires an initially playable configuration. An HTTPS source needs working internet for its first download; after successful staging it works offline. A local source and its files provide an immediate offline fallback. Remote bootstrap settings alone do not supply local fallback artwork.
 
 Run on the Pi from the transferred payload directory:
 
@@ -69,3 +71,24 @@ When configured, the supervisor:
 - leaves the current browser untouched when DNS, Wi-Fi, the cloud endpoint or validation fails.
 
 The device endpoint must be anonymous and read-only and must never contain Wi-Fi, Google or administrator credentials. Administrative writes belong behind the authenticated control service, not on the Pi.
+
+## Local image slideshow
+
+Use this source in the device configuration:
+
+```json
+{
+  "type": "image_slideshow",
+  "durationSeconds": 15,
+  "slides": [
+    {"type": "image", "url": "drinks.png"},
+    {"type": "image", "url": "food.png"}
+  ]
+}
+```
+
+Slides retain their order. One image stays on screen; multiple images loop with simple cuts. Each image supports the same optional expected dimensions, SHA-256 and alt text as a single image. All images in a remote revision, including future scheduled sources, must download and validate before the player replaces its persisted configuration. Failed updates leave the previous revision playable after offline reboot.
+
+Limits: 1–50 slides, 3–300 seconds per slide, 20 MiB and 16,777,216 pixels per image. Across one complete device configuration, unique images may total at most 100 MiB encoded and 64 million decoded pixels (roughly 256 MB of raw RGBA image data; Chromium uses additional memory). Resize oversized artwork before upload. These limits apply to scheduled images as well. Cached images are rechecked against dimensions and checksums before use. Images with a SHA-256 use a stable URL/checksum cache key and are reused across configuration revisions. Legacy revision-keyed files are validated and migrated locally, supporting an offline player upgrade. Images without a checksum retain revision-specific keys. Older revision cache files are retained for recovery; automatic cache reclamation remains future work.
+
+Provision only the new Bar Prices TV with this player until the existing displays are intentionally upgraded. Older players do not gain slideshow support merely by receiving a new configuration.

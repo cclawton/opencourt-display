@@ -104,7 +104,8 @@ export async function createBackup({ region, stackName, outputDirectory }) {
   const tableCounts = {};
 
   for (const [name, outputKey] of Object.entries(DATA_OUTPUTS)) {
-    const tableName = requiredOutput(outputs, outputKey);
+    const tableName = outputs[outputKey];
+    if (!tableName) continue;
     const items = await scanAll(dynamodb, tableName);
     const body = Buffer.from(`${JSON.stringify(items, null, 2)}\n`);
     const relativePath = `data/${name}.json`;
@@ -194,7 +195,7 @@ function defaultDirectory() {
   return path.resolve(process.cwd(), '..', '.private-aws-backups', timestamp);
 }
 
-async function main() {
+export async function main() {
   const argv = process.argv.slice(2);
   const region =
     option(argv, '--region') ?? process.env.AWS_REGION ?? 'ap-southeast-2';

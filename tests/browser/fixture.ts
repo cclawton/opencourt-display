@@ -1,5 +1,4 @@
 import { test as base, expect } from '@playwright/test';
-
 export const titles = [
   'Saturday Morning',
   'Saturday Afternoon',
@@ -13,6 +12,7 @@ export const titles = [
 ];
 export const test = base.extend<{
   actorRole: 'admin' | 'convenor';
+  environmentLabel: string;
   room: {
     writes: {
       method: string;
@@ -23,7 +23,8 @@ export const test = base.extend<{
   };
 }>({
   actorRole: ['admin', { option: true }],
-  room: async ({ page, baseURL, actorRole }, provide) => {
+  environmentLabel: ['', { option: true }],
+  room: async ({ page, baseURL, actorRole, environmentLabel }, provide) => {
     let content = titles.map((title, i) => ({
       contentId: `fixture-${i}`,
       title,
@@ -105,7 +106,7 @@ export const test = base.extend<{
       )
         return route.fulfill({
           contentType: 'application/javascript',
-          body: `window.OPENCOURT_WEB_CONFIG={apiBaseUrl:'https://api.fixture.invalid',googleClientId:'fixture.apps.googleusercontent.com',deviceId:'honours-board-tv',devices:[{deviceId:'honours-board-tv',name:'Bar Room TV'},{deviceId:'opencourt-kitchen',name:'Kitchen TV'}],cognitoUserPoolId:'ap-southeast-2_fixture',cognitoUserPoolClientId:'fixture-client'};`,
+          body: `window.OPENCOURT_WEB_CONFIG={environmentLabel:${JSON.stringify(environmentLabel)},apiBaseUrl:'https://api.fixture.invalid',googleClientId:'fixture.apps.googleusercontent.com',deviceId:'honours-board-tv',devices:[{deviceId:'honours-board-tv',name:'Bar Room TV'},{deviceId:'opencourt-kitchen',name:'Kitchen TV'}],cognitoUserPoolId:'ap-southeast-2_fixture',cognitoUserPoolClientId:'fixture-client'};`,
         });
       if (url.hostname === 'accounts.google.com') {
         if (url.pathname === '/gsi/client')
@@ -159,7 +160,24 @@ export const test = base.extend<{
         if (method === 'GET' && url.pathname === '/admin/content')
           return route.fulfill({ json: { content } });
         if (method === 'GET' && url.pathname === '/admin/convenors')
-          return route.fulfill({ json: { convenors: [] } });
+          return route.fulfill({
+            json: {
+              administrators: [
+                { email: 'admin-one@example.test' },
+                { email: 'admin-two@example.test' },
+              ],
+              convenors: [
+                {
+                  username: 'fixture-convenor',
+                  name: 'Night Convenor',
+                  email: 'night@example.test',
+                  phoneNumber: '+61400000000',
+                  enabled: true,
+                  deliveryMethods: ['sms', 'email'],
+                },
+              ],
+            },
+          });
         if (
           method === 'GET' &&
           /^\/admin\/devices\/[^/]+$/.test(url.pathname)

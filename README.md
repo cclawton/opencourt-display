@@ -89,7 +89,7 @@ The extension model being tested keeps authoring and publishing explicit:
 
 Saving a club editor does not change a TV. The generic player receives display images, not private editor records. For example, one club can privately maintain honours-board and food/drink prices editors while contributing player and slideshow improvements to OpenCourt for everyone.
 
-**Development status:** Google Slides and single images are in the published core. Local image slideshows and the optional extension hooks have been implemented and tested in the development checkout and an isolated club test deployment; their core implementation has not yet been committed or published here. Existing players need the supporting software before receiving an image slideshow. The documentation describes that developing model, not a released plugin SDK.
+**Development status:** Google Slides and single images are in the published core. Local image slideshows and the optional extension hooks have been implemented and tested in the development checkout and an isolated club test deployment; their core implementation is checkpointed on the `codex/local-slideshow-club-extensions` development branch and has not been merged into `main` or released. Existing players need the supporting software before receiving an image slideshow. The documentation describes that developing model, not a released plugin SDK.
 
 See [Club extension model](docs/CLUB_EXTENSIONS.md) for repository ownership, frontend/backend composition, privacy boundaries and release compatibility.
 

@@ -6,6 +6,7 @@ The backup includes:
 
 - both display records, including their independent schedules and device heartbeat credential hashes;
 - content, legacy programme and legacy image metadata;
+- private extension tables only when the club-specific backup wrapper supplies their schema (the generic backup does not include them);
 - the retained display-change audit history;
 - uploaded images below the private S3 `display-assets/` prefix; and
 - Cognito convenor names, verified contact attributes, enabled state and group membership.

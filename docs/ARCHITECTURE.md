@@ -25,6 +25,7 @@ The shared player supports at least two providers:
 
 - `google_slides` for court allocations maintained by convenors.
 - `image` for an original-resolution JPEG or PNG such as the 3840×2160 honours board.
+- `image_slideshow` for ordered local JPEG/PNG playback on players that advertise support. Complete revisions are staged and validated before activation; already downloaded content plays without a network connection, including after reboot.
 
 Each physical Pi has a stable device ID and a profile. The honours-board Pi normally selects the image provider; the court-allocation Pi normally selects scheduled Slides. An authorised override may temporarily select another source without changing the appliance software.
 
@@ -38,7 +39,9 @@ The web application is a browser-based working prototype. It demonstrates the pl
 
 AWS serverless is the selected production platform. The browser application will be deployed as static assets through S3 and CloudFront. A small Lambda API and DynamoDB table will hold device configuration, schedules, overrides and audit records. Google Workspace identity will protect administrative writes; a display receives only its read-only, non-secret configuration. Infrastructure is defined with AWS CDK in TypeScript, with no always-on servers, database instances, NAT Gateway or load balancer.
 
-The existing `vinext`/Wrangler build is a local prototype dependency and will be replaced before production deployment. The Raspberry Pi player and its provider interfaces remain hosting-neutral.
+Optional club editors live in independently version-controlled private extensions. The public build supplies an empty administrator-only editor registry and an authenticated backend extension hook. Private infrastructure composition may add editor-specific resources in the original stack scope to preserve existing resource identities. Editors export ordinary images; users explicitly upload those files through generic Content. Public device configuration never includes private editor records.
+
+Vite builds the static React application. The Raspberry Pi player and its provider interfaces remain hosting-neutral.
 
 The AWS control plane is implemented in `infra/`: on-demand DynamoDB tables and a 128 MB ARM Lambda Function URL expose a whitelisted public device configuration plus authenticated control-room routes. Google Workspace administrators can manage displays, content, schedules and users; Cognito convenors can manage displays and schedules. Lambda reserved concurrency is capped at ten. JSON logs retain only application errors and system warnings for 14 days, while a CloudWatch dashboard graphs standard request, error, throttle, duration and concurrency metrics. The deployment requires actual-cost alerts at USD $1, $5 and $10. Reserved concurrency has no standing charge, and the public routes remain read-only except for authenticated device status reports.
 
@@ -63,7 +66,7 @@ A programme contains:
 - Optional activity labels.
 - Priority and collision behaviour.
 
-The current control room deliberately has no scheduling or event-override UI. Date-specific events remain a backlog item; the committee first chooses a named content item for the display.
+The current control room supports weekly schedules with a fallback content item. Date-specific events remain a backlog item. Source snapshots are explicit: after editing content, select it again for a display or save the relevant schedule to publish the new revision.
 
 ## Trust boundaries
 

@@ -39,34 +39,50 @@
     <script>
       (() => {
         const params = new URLSearchParams(window.location.search);
-        const source = params.get('image');
-        const expectedWidth = Number(params.get('expectedWidth'));
-        const expectedHeight = Number(params.get('expectedHeight'));
         const revision = params.get('revision') || '';
         const status = document.querySelector('#status');
-
-        if (!source || !/^(?:assets\/)?[A-Za-z0-9][A-Za-z0-9._-]*$/.test(source)) {
-          status.textContent = 'The configured display image is invalid.';
+        let slides;
+        const duration = Number(params.get('durationSeconds') || 15);
+        try {
+          slides = params.has('slides') ? JSON.parse(params.get('slides')) : [{
+            image: params.get('image'), expectedWidth: params.get('expectedWidth'),
+            expectedHeight: params.get('expectedHeight'), alt: params.get('alt'),
+          }];
+          if (!Array.isArray(slides) || slides.length < 1 || slides.length > 50 ||
+              !Number.isInteger(duration) || duration < 3 || duration > 300 ||
+              slides.some(slide => !slide || typeof slide.image !== 'string' ||
+                !/^(?:assets\/)?[A-Za-z0-9][A-Za-z0-9._-]*$/.test(slide.image))) {
+            throw new Error('The configured display images are invalid.');
+          }
+        } catch (error) {
+          status.textContent = 'The configured display images are invalid.';
           return;
         }
 
-        const image = new Image();
-        image.alt = params.get('alt') || 'Club display';
-        image.onload = () => {
-          if (
-            (expectedWidth && image.naturalWidth !== expectedWidth) ||
-            (expectedHeight && image.naturalHeight !== expectedHeight)
-          ) {
-            status.textContent =
-              `Image dimensions ${image.naturalWidth}×${image.naturalHeight} do not match the configured dimensions.`;
-            return;
+        // Decode the complete slideshow before revealing it. No network is needed.
+        Promise.all(slides.map(slide => new Promise((resolve, reject) => {
+          const image = new Image();
+          image.alt = slide.alt || 'Club display';
+          image.onload = () => {
+            if ((Number(slide.expectedWidth) && image.naturalWidth !== Number(slide.expectedWidth)) ||
+                (Number(slide.expectedHeight) && image.naturalHeight !== Number(slide.expectedHeight))) {
+              reject(new Error('An image does not match the configured dimensions.'));
+              return;
+            }
+            resolve(image);
+          };
+          image.onerror = () => reject(new Error('A display image could not be loaded.'));
+          image.src = `${slide.image}?opencourtRevision=${encodeURIComponent(revision)}`;
+        }))).then(images => {
+          let index = 0;
+          document.body.replaceChildren(images[0]);
+          if (images.length > 1) {
+            setInterval(() => {
+              index = (index + 1) % images.length;
+              document.body.replaceChildren(images[index]);
+            }, duration * 1000);
           }
-          document.body.replaceChildren(image);
-        };
-        image.onerror = () => {
-          status.textContent = 'The configured display image could not be loaded.';
-        };
-        image.src = `${source}?opencourtRevision=${encodeURIComponent(revision)}`;
+        }).catch(error => { status.textContent = error.message; });
       })();
     </script>
   </body>

@@ -16,7 +16,9 @@ import {
   UserPlus,
 } from 'lucide-react';
 
+import { ImageSlideshowEditor } from '@/components/image-slideshow-editor';
 import { GoogleSignIn, signOutGoogle } from '@/components/google-sign-in';
+import { clubExtensions } from '@club-extensions';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import {
@@ -30,6 +32,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import {
   createSlideshowContent,
+  createImageSlideshowContent,
   createControlRoomSession,
   createConvenor,
   deleteContent,
@@ -37,13 +40,14 @@ import {
   deleteControlRoomSession,
   issueDeviceAction,
   loadControlRoomState,
-  listConvenors,
+  listManagedUsers,
   listPublicConvenors,
   updateContent,
   updateDeviceSchedule,
   uploadContentImage,
   type RemoteContent,
   type RemoteDevice,
+  type Administrator,
   type ControlActor,
   type Convenor,
 } from '@/lib/control-api';
@@ -54,9 +58,14 @@ import {
 } from '@/lib/convenor-auth';
 import type { RuntimeConfig } from '@/lib/runtime-config';
 
-type Section = 'displays' | 'content' | 'schedule' | 'users';
+type Section =
+  | 'displays'
+  | 'content'
+  | 'schedule'
+  | 'users'
+  | `extension:${string}`;
 type Editor = {
-  mode: 'create-slideshow' | 'create-image' | 'edit';
+  mode: 'create-slideshow' | 'create-image' | 'create-image-slideshow' | 'edit';
   contentId?: string;
 } | null;
 type ScheduleEntry = {
@@ -75,6 +84,14 @@ const weekdays = [
   'Sunday',
 ];
 const SESSION_STORAGE_KEY = 'opencourt-control-session';
+
+function sourceUrl(source: RemoteContent['source']) {
+  return source && 'url' in source
+    ? source.url
+    : source
+      ? JSON.stringify(source)
+      : undefined;
+}
 
 function scheduledContentId(device: RemoteDevice | null) {
   if (device?.mode !== 'schedule' || !device.schedule) return undefined;
@@ -136,6 +153,16 @@ export function DeployedControlRoom({ config }: { config: RuntimeConfig }) {
       : window.localStorage.getItem(SESSION_STORAGE_KEY),
   );
   const [section, setSection] = useState<Section>('displays');
+  const [extensionDirty, setExtensionDirty] = useState(false);
+  function requestSection(next: Section) {
+    if (
+      next !== section &&
+      extensionDirty &&
+      !window.confirm('Leave without saving your changes?')
+    )
+      return;
+    setSection(next);
+  }
   const [content, setContent] = useState<RemoteContent[]>([]);
   const [devices, setDevices] = useState<RemoteDevice[]>([]);
   const [device, setDevice] = useState<RemoteDevice | null>(null);
@@ -147,9 +174,13 @@ export function DeployedControlRoom({ config }: { config: RuntimeConfig }) {
   const [title, setTitle] = useState('');
   const [url, setUrl] = useState('');
   const [file, setFile] = useState<File | null>(null);
+  const [slideImageIds, setSlideImageIds] = useState<string[]>([]);
+  const [slideDuration, setSlideDuration] = useState(15);
+  const [uploadedImages, setUploadedImages] = useState<RemoteContent[]>([]);
   const [scheduleEntries, setScheduleEntries] = useState<ScheduleEntry[]>([]);
   const [scheduleFallbackId, setScheduleFallbackId] = useState('');
   const [actor, setActor] = useState<ControlActor | null>(null);
+  const [administrators, setAdministrators] = useState<Administrator[]>([]);
   const [convenors, setConvenors] = useState<Convenor[]>([]);
   const [selectedConvenor, setSelectedConvenor] = useState('');
   const [convenorDelivery, setConvenorDelivery] = useState<'sms' | 'email'>(
@@ -161,6 +192,10 @@ export function DeployedControlRoom({ config }: { config: RuntimeConfig }) {
   const [convenorPhone, setConvenorPhone] = useState('');
   const [convenorEmail, setConvenorEmail] = useState('');
   const [showDiagnostics, setShowDiagnostics] = useState(false);
+  const activeExtension = clubExtensions.find(
+    (extension) => section === `extension:${extension.id}`,
+  );
+  const ExtensionComponent = activeExtension?.Component;
 
   const load = useCallback(
     async (credential: string) => {
@@ -178,9 +213,11 @@ export function DeployedControlRoom({ config }: { config: RuntimeConfig }) {
             loadedDevice,
         );
         setActor(state.actor);
-        if (state.actor.role === 'admin')
-          setConvenors(await listConvenors(config, credential));
-        else
+        if (state.actor.role === 'admin') {
+          const users = await listManagedUsers(config, credential);
+          setAdministrators(users.administrators);
+          setConvenors(users.convenors);
+        } else
           setSection((current) =>
             current === 'content' || current === 'users' ? 'displays' : current,
           );
@@ -205,7 +242,8 @@ export function DeployedControlRoom({ config }: { config: RuntimeConfig }) {
             ? '__schedule__'
             : loadedDevice.activeSelection?.contentId ||
                 state.content.find(
-                  (item) => item.source?.url === loadedDevice.source.url,
+                  (item) =>
+                    sourceUrl(item.source) === sourceUrl(loadedDevice.source),
                 )?.contentId ||
                 state.content[0]?.contentId ||
                 '',
@@ -267,11 +305,30 @@ export function DeployedControlRoom({ config }: { config: RuntimeConfig }) {
       content.find(
         (item) => item.contentId === device?.activeSelection?.contentId,
       ) ??
-      content.find((item) => item.source?.url === device?.source.url),
+      content.find(
+        (item) => sourceUrl(item.source) === sourceUrl(device?.source ?? null),
+      ),
     [content, device],
   );
   const slideshows = content.filter((item) => item.type === 'slideshow');
-  const images = content.filter((item) => item.type === 'image');
+  const images = [
+    ...content.filter((item) => item.type === 'image'),
+    ...uploadedImages.filter(
+      (image) => !content.some((item) => item.contentId === image.contentId),
+    ),
+  ];
+  const imageSlideshows = content.filter(
+    (item) => item.type === 'image_slideshow',
+  );
+  const supportsImageSlideshow =
+    (device?.capabilities?.local_image_slideshow ?? 0) >= 1;
+  const unsupported = (item: RemoteContent) =>
+    item.type === 'image_slideshow' && !supportsImageSlideshow;
+  const editingImageSlideshow =
+    editor?.mode === 'create-image-slideshow' ||
+    (editor?.mode === 'edit' &&
+      content.find((item) => item.contentId === editor.contentId)?.type ===
+        'image_slideshow');
   const selectedConvenorAccount = convenors.find(
     (item) => item.username === selectedConvenor,
   );
@@ -291,7 +348,8 @@ export function DeployedControlRoom({ config }: { config: RuntimeConfig }) {
             ? scheduledContentId(display)
             : (display.activeSelection?.contentId ??
               content.find(
-                (candidate) => candidate.source?.url === display.source.url,
+                (candidate) =>
+                  sourceUrl(candidate.source) === sourceUrl(display.source),
               )?.contentId);
         return selected === item.contentId;
       })
@@ -314,8 +372,9 @@ export function DeployedControlRoom({ config }: { config: RuntimeConfig }) {
       next.mode === 'schedule'
         ? '__schedule__'
         : next.activeSelection?.contentId ||
-            content.find((item) => item.source?.url === next.source.url)
-              ?.contentId ||
+            content.find(
+              (item) => sourceUrl(item.source) === sourceUrl(next.source),
+            )?.contentId ||
             '',
     );
   }
@@ -351,17 +410,95 @@ export function DeployedControlRoom({ config }: { config: RuntimeConfig }) {
     setTitle('');
     setUrl('');
     setFile(null);
+    setSlideImageIds([]);
+    setSlideDuration(15);
+  }
+
+  async function uploadSlideshowImages(files: File[]) {
+    if (files.length + slideImageIds.length > 50) {
+      setError('Choose up to 50 pictures for a slideshow.');
+      return;
+    }
+    if (
+      files.some(
+        (item) =>
+          !['image/jpeg', 'image/png'].includes(item.type) ||
+          item.size > 20 * 1024 * 1024,
+      )
+    ) {
+      setError('Choose JPEG or PNG pictures no larger than 20 MB each.');
+      return;
+    }
+    await run(async () => {
+      for (const item of files) {
+        const uploaded = await uploadContentImage(
+          config,
+          token!,
+          item.name,
+          item,
+          await imageDimensions(item),
+        );
+        setUploadedImages((previous) => [...previous, uploaded]);
+        setSlideImageIds((previous) => [...previous, uploaded.contentId]);
+      }
+    }, 'Images uploaded. Arrange the pictures, then save the slideshow.');
   }
 
   function startEdit(item: RemoteContent) {
     setEditor({ mode: 'edit', contentId: item.contentId });
     setTitle(item.title);
-    setUrl(item.type === 'slideshow' ? (item.source?.url ?? '') : '');
+    setSlideImageIds(
+      item.type === 'image_slideshow'
+        ? item.source?.type === 'image_slideshow'
+          ? item.source.slides
+              .map((slide) => slide.contentId ?? '')
+              .filter(Boolean)
+          : []
+        : [],
+    );
+    setSlideDuration(
+      item.source?.type === 'image_slideshow'
+        ? item.source.durationSeconds
+        : 15,
+    );
+    setUrl(item.type === 'slideshow' ? (sourceUrl(item.source) ?? '') : '');
     setFile(null);
   }
 
   async function saveEditor() {
     if (!token || !editor) return;
+    if (editingImageSlideshow) {
+      if (
+        !title.trim() ||
+        !slideImageIds.length ||
+        !Number.isInteger(slideDuration) ||
+        slideDuration < 3 ||
+        slideDuration > 300
+      ) {
+        setError(
+          'Enter a name, add at least one picture, and choose 3–300 whole seconds per picture.',
+        );
+        return;
+      }
+      await run(async () => {
+        if (editor.mode === 'edit')
+          await updateContent(config, token, editor.contentId!, {
+            title,
+            imageContentIds: slideImageIds,
+            durationSeconds: slideDuration,
+          });
+        else
+          await createImageSlideshowContent(
+            config,
+            token,
+            title,
+            slideImageIds,
+            slideDuration,
+          );
+        closeEditor();
+      }, 'Image slideshow saved. Select it on Displays to show these changes. If it is scheduled, save that schedule again.');
+      return;
+    }
     if (editor.mode === 'create-slideshow') {
       await run(async () => {
         await createSlideshowContent(config, token, title, url);
@@ -430,7 +567,14 @@ export function DeployedControlRoom({ config }: { config: RuntimeConfig }) {
             <div className="mb-3 grid size-11 place-items-center rounded-full bg-tennis font-black">
               OC
             </div>
-            <CardTitle className="font-display text-2xl">OpenCourt</CardTitle>
+            <CardTitle className="font-display text-2xl">
+              OpenCourt
+              {config.environmentLabel && (
+                <span className="ml-3 rounded-md bg-amber-300 px-3 py-1 text-sm font-black text-amber-950">
+                  {config.environmentLabel}
+                </span>
+              )}
+            </CardTitle>
             <CardDescription>
               Sign in with the club Google account to control the TVs.
             </CardDescription>
@@ -593,6 +737,11 @@ export function DeployedControlRoom({ config }: { config: RuntimeConfig }) {
             <p className="hidden text-sm font-bold text-white/70 sm:block">
               OpenCourt Control
             </p>
+            {config.environmentLabel && (
+              <span className="rounded-md bg-amber-300 px-3 py-1 text-sm font-black text-amber-950">
+                {config.environmentLabel}
+              </span>
+            )}
           </div>
           <Button
             className="border-white/20 bg-transparent text-white hover:bg-white/10"
@@ -606,6 +755,7 @@ export function DeployedControlRoom({ config }: { config: RuntimeConfig }) {
               setContent([]);
               setDevice(null);
               setActor(null);
+              setAdministrators([]);
               setCodeRequested(false);
               setOneTimeCode('');
             }}
@@ -619,18 +769,18 @@ export function DeployedControlRoom({ config }: { config: RuntimeConfig }) {
       <div className="mx-auto max-w-5xl px-4 py-6 sm:px-6 sm:py-9">
         <nav
           aria-label="Control room sections"
-          className="mb-6 inline-flex rounded-xl bg-white p-1 shadow-sm ring-1 ring-black/5"
+          className="mb-6 flex w-full max-w-full overflow-x-auto rounded-xl bg-white p-1 shadow-sm ring-1 ring-black/5 [&>button]:shrink-0"
         >
           <button
             className={`rounded-lg px-5 py-2 text-sm font-bold ${section === 'displays' ? 'bg-club-green text-white' : 'text-court-ink/60 hover:text-court-ink'}`}
-            onClick={() => setSection('displays')}
+            onClick={() => requestSection('displays')}
           >
             Displays
           </button>
           {actor?.role === 'admin' && (
             <button
               className={`rounded-lg px-5 py-2 text-sm font-bold ${section === 'content' ? 'bg-club-green text-white' : 'text-court-ink/60 hover:text-court-ink'}`}
-              onClick={() => setSection('content')}
+              onClick={() => requestSection('content')}
             >
               Content
             </button>
@@ -638,17 +788,27 @@ export function DeployedControlRoom({ config }: { config: RuntimeConfig }) {
           {actor?.role === 'admin' && (
             <button
               className={`rounded-lg px-5 py-2 text-sm font-bold ${section === 'users' ? 'bg-club-green text-white' : 'text-court-ink/60 hover:text-court-ink'}`}
-              onClick={() => setSection('users')}
+              onClick={() => requestSection('users')}
             >
               Users
             </button>
           )}
           <button
             className={`rounded-lg px-5 py-2 text-sm font-bold ${section === 'schedule' ? 'bg-club-green text-white' : 'text-court-ink/60 hover:text-court-ink'}`}
-            onClick={() => setSection('schedule')}
+            onClick={() => requestSection('schedule')}
           >
             Schedule
           </button>
+          {actor?.role === 'admin' &&
+            clubExtensions.map((extension) => (
+              <button
+                key={extension.id}
+                className={`rounded-lg px-5 py-2 text-sm font-bold ${section === `extension:${extension.id}` ? 'bg-club-green text-white' : 'text-court-ink/60 hover:text-court-ink'}`}
+                onClick={() => requestSection(`extension:${extension.id}`)}
+              >
+                {extension.label}
+              </button>
+            ))}
         </nav>
 
         {(message || error) && (
@@ -812,14 +972,28 @@ export function DeployedControlRoom({ config }: { config: RuntimeConfig }) {
                     {device?.schedule && (
                       <option value="__schedule__">Schedule</option>
                     )}
-                    <optgroup label="Slideshows">
+                    <optgroup label="Google Slides">
                       {slideshows.map((item) => (
                         <option key={item.contentId} value={item.contentId}>
                           {item.title}
                         </option>
                       ))}
                     </optgroup>
-                    <optgroup label="Still images">
+                    <optgroup label="Image slideshows">
+                      {imageSlideshows.map((item) => (
+                        <option
+                          key={item.contentId}
+                          value={item.contentId}
+                          disabled={unsupported(item)}
+                        >
+                          {item.title}
+                          {unsupported(item)
+                            ? ' — TV software update needed'
+                            : ''}
+                        </option>
+                      ))}
+                    </optgroup>
+                    <optgroup label="Single images">
                       {images.map((item) => (
                         <option key={item.contentId} value={item.contentId}>
                           {item.title}
@@ -828,10 +1002,24 @@ export function DeployedControlRoom({ config }: { config: RuntimeConfig }) {
                     </optgroup>
                   </select>
                 </div>
+                {!supportsImageSlideshow && (
+                  <p className="text-sm text-court-ink/65">
+                    {device ? deviceName(device) : 'This TV'} cannot show image
+                    slideshows yet. Its display software needs updating. Choose
+                    a single image or Google Slides instead.
+                  </p>
+                )}
                 <div className="flex flex-col gap-2 sm:flex-row">
                   <Button
                     className="bg-club-green text-white hover:bg-club-green/90"
-                    disabled={busy || !selectedId}
+                    disabled={
+                      busy ||
+                      !selectedId ||
+                      content.some(
+                        (item) =>
+                          item.contentId === selectedId && unsupported(item),
+                      )
+                    }
                     onClick={() =>
                       run(
                         async () => {
@@ -882,17 +1070,57 @@ export function DeployedControlRoom({ config }: { config: RuntimeConfig }) {
               </CardContent>
             </Card>
           </div>
+        ) : ExtensionComponent && actor?.role === 'admin' ? (
+          <ExtensionComponent
+            key={`${actor.email}:${activeExtension?.id}`}
+            config={config}
+            token={token}
+            onDirtyChange={setExtensionDirty}
+          />
         ) : section === 'users' ? (
           <div className="space-y-5">
             <div>
               <h1 className="font-display text-2xl font-black">Users</h1>
               <p className="text-sm text-court-ink/55">
-                Add up to five competition convenors. They can change, refresh
-                and schedule TV displays.
+                Review full-access administrators and manage up to five
+                competition convenors.
               </p>
             </div>
             <Card className="border-0 bg-white ring-0">
               <CardContent className="space-y-4 pt-6">
+                <div>
+                  <h2 className="font-display text-lg font-black">
+                    Administrator accounts
+                  </h2>
+                  <p className="text-sm text-court-ink/55">
+                    Full access to displays, schedules, content, users and
+                    installed club tools.
+                  </p>
+                </div>
+                <div className="divide-y divide-black/5">
+                  {administrators.map((item) => (
+                    <div
+                      className="flex items-center justify-between gap-4 py-3"
+                      key={item.email}
+                    >
+                      <p className="font-bold">{item.email}</p>
+                      <Badge variant="secondary">Google</Badge>
+                    </div>
+                  ))}
+                </div>
+              </CardContent>
+            </Card>
+            <Card className="border-0 bg-white ring-0">
+              <CardContent className="space-y-4 pt-6">
+                <div>
+                  <h2 className="font-display text-lg font-black">
+                    Convenor accounts
+                  </h2>
+                  <p className="text-sm text-court-ink/55">
+                    Can change or refresh TVs and manage display schedules. They
+                    cannot manage users or content.
+                  </p>
+                </div>
                 <div className="grid gap-3 sm:grid-cols-3">
                   <div className="space-y-2">
                     <Label htmlFor="convenor-new-name">Name</Label>
@@ -1020,6 +1248,12 @@ export function DeployedControlRoom({ config }: { config: RuntimeConfig }) {
                 <p className="font-bold text-club-green">
                   Editing {device ? deviceName(device) : 'TV'} schedule
                 </p>
+                {!supportsImageSlideshow && (
+                  <p className="text-sm text-court-ink/65">
+                    Image slideshows need a display software update on this TV.
+                    Choose a single image or Google Slides for its schedule.
+                  </p>
+                )}
                 <div className="space-y-2">
                   <Label htmlFor="schedule-fallback">All other times</Label>
                   <select
@@ -1034,8 +1268,15 @@ export function DeployedControlRoom({ config }: { config: RuntimeConfig }) {
                       Choose content
                     </option>
                     {content.map((item) => (
-                      <option key={item.contentId} value={item.contentId}>
+                      <option
+                        key={item.contentId}
+                        value={item.contentId}
+                        disabled={unsupported(item)}
+                      >
                         {item.title}
+                        {unsupported(item)
+                          ? ' — TV software update needed'
+                          : ''}
                       </option>
                     ))}
                   </select>
@@ -1091,8 +1332,15 @@ export function DeployedControlRoom({ config }: { config: RuntimeConfig }) {
                         value={entry.contentId}
                       >
                         {content.map((item) => (
-                          <option key={item.contentId} value={item.contentId}>
+                          <option
+                            key={item.contentId}
+                            value={item.contentId}
+                            disabled={unsupported(item)}
+                          >
                             {item.title}
+                            {unsupported(item)
+                              ? ' — TV software update needed'
+                              : ''}
                           </option>
                         ))}
                       </select>
@@ -1130,7 +1378,9 @@ export function DeployedControlRoom({ config }: { config: RuntimeConfig }) {
                           day: 'Monday',
                           startTime: '09:00',
                           endTime: '10:00',
-                          contentId: content[0]?.contentId ?? '',
+                          contentId:
+                            content.find((item) => !unsupported(item))
+                              ?.contentId ?? '',
                         },
                       ])
                     }
@@ -1139,7 +1389,18 @@ export function DeployedControlRoom({ config }: { config: RuntimeConfig }) {
                   </Button>
                   <Button
                     className="bg-club-green text-white hover:bg-club-green/90"
-                    disabled={busy || !scheduleFallbackId}
+                    disabled={
+                      busy ||
+                      !scheduleFallbackId ||
+                      content.some(
+                        (item) =>
+                          unsupported(item) &&
+                          (item.contentId === scheduleFallbackId ||
+                            scheduleEntries.some(
+                              (entry) => entry.contentId === item.contentId,
+                            )),
+                      )
+                    }
                     onClick={() => {
                       if (!device) return;
                       const scheduleDevice = device;
@@ -1172,11 +1433,20 @@ export function DeployedControlRoom({ config }: { config: RuntimeConfig }) {
               <div>
                 <h1 className="font-display text-2xl font-black">Content</h1>
                 <p className="text-sm text-court-ink/55">
-                  Manage the slideshows and still images available to every
-                  display.
+                  Manage the images, image slideshows and Google Slides
+                  available to every display.
                 </p>
               </div>
-              <div className="flex gap-2">
+              <div className="flex flex-wrap gap-2">
+                <Button
+                  className="bg-club-green text-white hover:bg-club-green/90"
+                  onClick={() => {
+                    closeEditor();
+                    setEditor({ mode: 'create-image-slideshow' });
+                  }}
+                >
+                  <ImageIcon /> Add image slideshow
+                </Button>
                 <Button
                   className="bg-club-green text-white hover:bg-club-green/90"
                   onClick={() => {
@@ -1193,7 +1463,7 @@ export function DeployedControlRoom({ config }: { config: RuntimeConfig }) {
                     setEditor({ mode: 'create-image' });
                   }}
                 >
-                  <ImageIcon /> Add image
+                  <ImageIcon /> Add single image
                 </Button>
               </div>
             </div>
@@ -1202,11 +1472,13 @@ export function DeployedControlRoom({ config }: { config: RuntimeConfig }) {
               <Card className="border-club-green/30 bg-white ring-1 ring-club-green/10">
                 <CardHeader>
                   <CardTitle className="text-lg">
-                    {editor.mode === 'create-slideshow'
-                      ? 'Add public Google Slides presentation'
-                      : editor.mode === 'create-image'
-                        ? 'Add image'
-                        : 'Edit content'}
+                    {editor.mode === 'create-image-slideshow'
+                      ? 'Add image slideshow'
+                      : editor.mode === 'create-slideshow'
+                        ? 'Add public Google Slides presentation'
+                        : editor.mode === 'create-image'
+                          ? 'Add single image'
+                          : 'Edit content'}
                   </CardTitle>
                 </CardHeader>
                 <CardContent className="grid gap-4">
@@ -1270,6 +1542,17 @@ export function DeployedControlRoom({ config }: { config: RuntimeConfig }) {
                       </p>
                     </div>
                   )}
+                  {editingImageSlideshow && (
+                    <ImageSlideshowEditor
+                      images={images}
+                      imageIds={slideImageIds}
+                      duration={slideDuration}
+                      busy={busy}
+                      onChange={setSlideImageIds}
+                      onDurationChange={setSlideDuration}
+                      onUpload={uploadSlideshowImages}
+                    />
+                  )}
                   <div className="flex gap-2">
                     <Button
                       className="bg-club-green text-white hover:bg-club-green/90"
@@ -1321,10 +1604,12 @@ export function DeployedControlRoom({ config }: { config: RuntimeConfig }) {
                           </div>
                           <p className="text-xs text-court-ink/45">
                             {item.type === 'slideshow'
-                              ? 'Slideshow'
-                              : item.width && item.height
-                                ? `Still image · ${item.width}×${item.height}`
-                                : 'Still image'}
+                              ? 'Google Slides'
+                              : item.type === 'image_slideshow'
+                                ? 'Image slideshow'
+                                : item.width && item.height
+                                  ? `Single image · ${item.width}×${item.height}`
+                                  : 'Single image'}
                           </p>
                         </div>
                       </div>

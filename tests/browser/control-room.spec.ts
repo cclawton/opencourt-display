@@ -53,17 +53,23 @@ test('nine seeded-shape items, current selection and responsive layout', async (
   page,
   room,
 }) => {
+  expect(
+    await page
+      .getByLabel('Control room sections')
+      .getByRole('button')
+      .allTextContents(),
+  ).toEqual(['Displays', 'Content', 'Users', 'Schedule']);
   await expect(
     page.getByRole('img', { name: 'Heatherdale Tennis Club' }),
   ).toBeVisible();
   expect(
     await page.evaluate(() => getComputedStyle(document.body).fontFamily),
   ).toContain('Calibri');
-  await expect(page.locator('optgroup[label="Slideshows"] option')).toHaveText(
-    titles.slice(0, 8),
-  );
   await expect(
-    page.locator('optgroup[label="Still images"] option'),
+    page.locator('optgroup[label="Google Slides"] option'),
+  ).toHaveText(titles.slice(0, 8));
+  await expect(
+    page.locator('optgroup[label="Single images"] option'),
   ).toHaveText(['Honours Board']);
   await expect(page.getByText('Currently showing:')).toContainText(
     'Honours Board',
@@ -79,6 +85,32 @@ test('nine seeded-shape items, current selection and responsive layout', async (
     ),
   ).toBe(true);
   expect(room.writes).toEqual([]);
+});
+
+test('separates administrator and convenor accounts with their permissions', async ({
+  page,
+  room: _room,
+}) => {
+  await page.getByRole('button', { name: 'Users', exact: true }).click();
+  await expect(
+    page.getByRole('heading', { name: 'Administrator accounts' }),
+  ).toBeVisible();
+  await expect(page.getByText('admin-one@example.test')).toBeVisible();
+  await expect(page.getByText('admin-two@example.test')).toBeVisible();
+  await expect(
+    page.getByText(
+      'Full access to displays, schedules, content, users and installed club tools.',
+    ),
+  ).toBeVisible();
+  await expect(
+    page.getByRole('heading', { name: 'Convenor accounts' }),
+  ).toBeVisible();
+  await expect(page.getByText('Night Convenor')).toBeVisible();
+  await expect(
+    page.getByText(
+      'Can change or refresh TVs and manage display schedules. They cannot manage users or content.',
+    ),
+  ).toBeVisible();
 });
 
 test('TV information shows connection, network and hardware diagnostics', async ({
@@ -215,7 +247,9 @@ test('missing image gives actionable feedback without upload', async ({
   room,
 }) => {
   await page.getByRole('button', { name: 'Content', exact: true }).click();
-  await page.getByRole('button', { name: 'Add image', exact: true }).click();
+  await page
+    .getByRole('button', { name: 'Add single image', exact: true })
+    .click();
   await page.getByRole('button', { name: 'Save', exact: true }).click();
   await expect(page.getByRole('status')).toHaveText(
     'Choose a JPEG or PNG image.',
@@ -321,13 +355,15 @@ test('add and replace image use verified upload lifecycle', async ({
     buffer: Buffer.from(png, 'base64'),
   };
   await page.getByRole('button', { name: 'Content', exact: true }).click();
-  await page.getByRole('button', { name: 'Add image', exact: true }).click();
+  await page
+    .getByRole('button', { name: 'Add single image', exact: true })
+    .click();
   await page.getByLabel('Title', { exact: true }).fill('Test image');
   await page.getByLabel('Image file', { exact: true }).setInputFiles(image);
   await page.getByRole('button', { name: 'Save', exact: true }).click();
   await expect(page.getByRole('status')).toHaveText('Image added.');
   const row = page.locator('article').filter({ hasText: 'Test image' });
-  await expect(row).toContainText('Still image · 1×1');
+  await expect(row).toContainText('Single image · 1×1');
   await row.getByLabel('Replace').setInputFiles(image);
   await expect(page.getByRole('status')).toHaveText('Test image replaced.');
   expect(room.writes.map((w) => w.path)).toEqual([

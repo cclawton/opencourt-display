@@ -1,5 +1,5 @@
 [Unit]
-Description=OpenCourt local honours-board kiosk
+Description=OpenCourt display kiosk
 After=network-online.target systemd-user-sessions.service
 Wants=network-online.target
 Conflicts=getty@tty1.service

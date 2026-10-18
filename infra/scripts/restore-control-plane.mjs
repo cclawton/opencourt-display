@@ -41,7 +41,8 @@ import {
 
 async function assertEmpty({ dynamodb, s3, cognito, outputs }) {
   for (const outputKey of Object.values(DATA_OUTPUTS)) {
-    const tableName = requiredOutput(outputs, outputKey);
+    const tableName = outputs[outputKey];
+    if (!tableName) continue;
     const result = await dynamodb.send(
       new ScanCommand({ TableName: tableName, Limit: 1, Select: 'COUNT' }),
     );
@@ -114,7 +115,8 @@ async function batchDelete(client, tableName, keys) {
 
 async function clearTarget({ dynamodb, s3, cognito, outputs }) {
   for (const [name, outputKey] of Object.entries(DATA_OUTPUTS)) {
-    const tableName = requiredOutput(outputs, outputKey);
+    const tableName = outputs[outputKey];
+    if (!tableName) continue;
     const keyNames = DATA_KEYS[name];
     const keys = [];
     let ExclusiveStartKey;
@@ -267,6 +269,7 @@ export async function restoreBackup({
 
   const restoredCounts = {};
   for (const [name, outputKey] of Object.entries(DATA_OUTPUTS)) {
+    if (!Object.hasOwn(manifest.contents?.tables ?? {}, name)) continue;
     const rawItems = await readJson(new URL(`data/${name}.json`, directory));
     const items = rewriteBaseUrl(rawItems, sourceBaseUrl, targetBaseUrl);
     await batchPut(dynamodb, requiredOutput(outputs, outputKey), items);
@@ -289,7 +292,7 @@ export async function restoreBackup({
   };
 }
 
-async function main() {
+export async function main() {
   const argv = process.argv.slice(2);
   const backupDirectory = option(argv, '--backup');
   if (!backupDirectory)

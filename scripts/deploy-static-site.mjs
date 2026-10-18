@@ -11,10 +11,34 @@ const stackName = option('--stack', 'OpenCourtControl');
 const region = option('--region', 'ap-southeast-2');
 const googleClientId = option('--google-client-id');
 const deviceId = option('--device-id', 'honours-board-tv');
-const devices = [
-  { deviceId, name: 'Bar Room TV' },
-  { deviceId: 'opencourt-kitchen', name: 'Kitchen TV' },
-];
+const devicesFile = option('--devices-file');
+const environmentLabel = option('--environment-label', '').trim();
+const devices = devicesFile
+  ? JSON.parse(await readFile(devicesFile, 'utf8'))
+  : [
+      { deviceId, name: 'Bar Room TV' },
+      { deviceId: 'opencourt-kitchen', name: 'Kitchen TV' },
+    ];
+if (
+  !Array.isArray(devices) ||
+  devices.length < 1 ||
+  devices.length > 100 ||
+  devices.some(
+    (item) =>
+      !item ||
+      typeof item.deviceId !== 'string' ||
+      !/^[a-z0-9][a-z0-9-]{1,63}$/.test(item.deviceId) ||
+      typeof item.name !== 'string' ||
+      !item.name.trim() ||
+      item.name.length > 80,
+  ) ||
+  new Set(devices.map((item) => item.deviceId)).size !== devices.length ||
+  !devices.some((item) => item.deviceId === deviceId) ||
+  environmentLabel.length > 32
+)
+  throw new Error(
+    'Provide a valid display list containing --device-id and an environment label of at most 32 characters.',
+  );
 if (!googleClientId || googleClientId.includes('not-configured'))
   throw new Error(
     'Pass a real --google-client-id before publishing the control room.',
@@ -58,7 +82,7 @@ const runtimePath = 'dist/runtime-config.js';
 const previousRuntime = await readFile(runtimePath, 'utf8');
 await writeFile(
   runtimePath,
-  `window.OPENCOURT_WEB_CONFIG = ${JSON.stringify({ apiBaseUrl, googleClientId, deviceId, devices, cognitoUserPoolId, cognitoUserPoolClientId })};\n`,
+  `window.OPENCOURT_WEB_CONFIG = ${JSON.stringify({ apiBaseUrl, googleClientId, deviceId, devices, cognitoUserPoolId, cognitoUserPoolClientId, environmentLabel })};\n`,
 );
 try {
   execFileSync(

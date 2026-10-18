@@ -192,6 +192,15 @@ function publicConvenor(item, includeContacts = false) {
   return result;
 }
 
+function configuredAdministrators() {
+  return (process.env.COMMITTEE_ADMIN_EMAILS ?? '')
+    .split(',')
+    .map((email) => email.trim().toLowerCase())
+    .filter(Boolean)
+    .sort()
+    .map((email) => ({ email }));
+}
+
 function validateConvenor(body) {
   const name = typeof body?.name === 'string' ? body.name.trim() : '';
   const phoneNumber =
@@ -311,6 +320,7 @@ function adminDevice(item) {
     updatedBy: item.updatedBy ?? null,
     lastConnectedAt: item.lastConnectedAt ?? null,
     diagnostics: item.diagnostics ?? null,
+    capabilities: item.diagnostics?.capabilities ?? item.capabilities ?? {},
   };
 }
 
@@ -343,6 +353,14 @@ function validateDiagnostics(body) {
       uptimeSeconds: number(body?.system?.uptimeSeconds, 315360000),
       playerVersion: shortText(body?.system?.playerVersion, 40),
     },
+    ...(body?.capabilities
+      ? {
+          capabilities: {
+            local_image_slideshow:
+              body.capabilities.local_image_slideshow === 1 ? 1 : 0,
+          },
+        }
+      : {}),
     network: { primaryIp: isIP(primaryIp) ? primaryIp : '' },
     revision:
       Number.isSafeInteger(body?.revision) && body.revision > 0
@@ -418,6 +436,20 @@ function bearerToken(headers = {}) {
 }
 
 function validateSource(source) {
+  if (source?.type === 'image_slideshow') {
+    if (
+      !Array.isArray(source.slides) ||
+      source.slides.length < 1 ||
+      source.slides.length > 50 ||
+      !Number.isInteger(source.durationSeconds) ||
+      source.durationSeconds < 3 ||
+      source.durationSeconds > 300 ||
+      source.slides.some((slide) => slide?.type !== 'image')
+    )
+      throw new HttpError(500, 'invalid_stored_source');
+    source.slides.forEach(validateSource);
+    return source;
+  }
   if (source?.type === 'image') {
     if (
       /^[a-zA-Z0-9][a-zA-Z0-9._/-]*$/.test(source.url ?? '') &&
@@ -532,7 +564,7 @@ function validateContent(item) {
   if (
     !item ||
     item.status !== 'ready' ||
-    !['slideshow', 'image'].includes(item.type)
+    !['slideshow', 'image', 'image_slideshow'].includes(item.type)
   )
     throw new HttpError(404, 'content_not_found');
   return validateSource(item.source);
@@ -546,10 +578,143 @@ function imageSource(asset) {
     url: asset.publicUrl,
     mimeType: asset.mimeType,
     expectedWidth: asset.width,
+    byteSize: asset.byteSize,
     expectedHeight: asset.height,
     assetId: asset.assetId,
     sha256: asset.sha256,
   });
+}
+
+function requireSourceCapability(device, source) {
+  if (
+    source?.type === 'image_slideshow' &&
+    !(
+      (device.diagnostics?.capabilities ?? device.capabilities)
+        ?.local_image_slideshow >= 1
+    )
+  ) {
+    // Deployment names let older device records retain their configuration unchanged.
+    let configuredNames = {};
+    try {
+      configuredNames = JSON.parse(process.env.DEVICE_DISPLAY_NAMES ?? '{}');
+    } catch {
+      // A malformed optional setting must not bypass capability enforcement.
+    }
+    const configuredName = configuredNames?.[device.deviceId];
+    const name =
+      device.name ||
+      device.displayName ||
+      (typeof configuredName === 'string' ? configuredName : device.deviceId);
+    throw new HttpError(
+      409,
+      `${name} cannot show image slideshows yet. Its display software needs updating. Choose a single image or Google Slides instead.`,
+    );
+  }
+}
+
+function requireScheduleCapabilities(device, schedule) {
+  if (!schedule) return;
+  requireSourceCapability(device, schedule.fallback?.source);
+  for (const entry of schedule.entries ?? [])
+    requireSourceCapability(device, entry.source);
+}
+
+function requireConfigImageBudget(config) {
+  const sources = [
+    config.source,
+    config.schedule?.fallback?.source,
+    ...(config.schedule?.entries ?? []).map((entry) => entry.source),
+  ];
+  const unique = new Map();
+  for (const source of sources) {
+    const images =
+      source?.type === 'image_slideshow'
+        ? source.slides
+        : source?.type === 'image'
+          ? [source]
+          : [];
+    for (const image of images) {
+      const key = `${image.url}|${image.sha256 ?? ''}`;
+      const previous = unique.get(key) ?? { pixels: 0, bytes: 0 };
+      const width = Number(image.expectedWidth);
+      const height = Number(image.expectedHeight);
+      const pixels =
+        Number.isSafeInteger(width) &&
+        width > 0 &&
+        Number.isSafeInteger(height) &&
+        height > 0
+          ? width * height
+          : 0;
+      const bytes =
+        Number.isSafeInteger(image.byteSize) && image.byteSize > 0
+          ? image.byteSize
+          : 0;
+      unique.set(key, {
+        pixels: Math.max(previous.pixels, pixels),
+        bytes: Math.max(previous.bytes, bytes),
+      });
+    }
+  }
+  const images = [...unique.values()];
+  if (
+    images.some((image) => image.pixels > 16777216) ||
+    images.reduce((total, image) => total + image.pixels, 0) > 64000000 ||
+    images.reduce((total, image) => total + image.bytes, 0) > 100 * 1024 * 1024
+  )
+    throw new HttpError(
+      400,
+      'The combined images for this TV are too large for reliable playback. Use smaller images or reduce the images in its slideshows and schedule.',
+    );
+}
+
+async function imageSlideshowSource(body, getContent) {
+  if (
+    !Array.isArray(body.imageContentIds) ||
+    body.imageContentIds.length < 1 ||
+    body.imageContentIds.length > 50 ||
+    body.imageContentIds.some(
+      (id) => typeof id !== 'string' || !CONTENT_ID_PATTERN.test(id),
+    )
+  )
+    throw new HttpError(
+      400,
+      'Choose between 1 and 50 images for the slideshow.',
+    );
+  if (
+    !Number.isInteger(body.durationSeconds) ||
+    body.durationSeconds < 3 ||
+    body.durationSeconds > 300
+  )
+    throw new HttpError(
+      400,
+      'Show each image for a whole number of seconds between 3 and 300.',
+    );
+  const images = await Promise.all(body.imageContentIds.map(getContent));
+  const slides = images.map((image) => {
+    if (
+      !image ||
+      image.type !== 'image' ||
+      image.status !== 'ready' ||
+      image.source?.type !== 'image'
+    )
+      throw new HttpError(
+        400,
+        'Choose uploaded images that are ready to display.',
+      );
+    return {
+      ...validateContent(image),
+      contentId: image.contentId,
+      expectedWidth: image.width ?? image.source.expectedWidth,
+      expectedHeight: image.height ?? image.source.expectedHeight,
+      byteSize: image.byteSize ?? image.source.byteSize,
+    };
+  });
+  requireConfigImageBudget({ source: { type: 'image_slideshow', slides } });
+  return {
+    type: 'image_slideshow',
+    slides,
+    durationSeconds: body.durationSeconds,
+  };
 }
 
 function eventName(value) {
@@ -627,6 +792,10 @@ function buildChange(current, action, programme, asset, content, actor, now) {
     throw new HttpError(400, 'unsupported_action');
   }
 
+  requireSourceCapability(current, source);
+  if (action.action === 'return_to_schedule')
+    requireScheduleCapabilities(current, current.schedule);
+
   const item = {
     ...current,
     revision,
@@ -637,6 +806,7 @@ function buildChange(current, action, programme, asset, content, actor, now) {
     updatedAt: now,
     updatedBy: actor.email,
   };
+  requireConfigImageBudget(item);
   if (action.action === 'set_honours_image') item.defaultSource = source;
   const audit = {
     deviceId: current.deviceId,
@@ -664,11 +834,13 @@ export function createHandler({
   listContent,
   putContent,
   deleteContent,
+  adminExtension,
   listDevices,
   updateDevice,
   verifyToken,
   exchangeSession,
   revokeSession,
+  listAdministrators = configuredAdministrators,
   listConvenors = async () => [],
   createConvenor,
   deleteConvenor,
@@ -759,11 +931,18 @@ export function createHandler({
       if (method === 'GET' && rawPath === '/admin/convenors') {
         const users = await listConvenors();
         return response(200, {
+          administrators: await listAdministrators(),
           convenors: users
             .map((user) => publicConvenor(user, true))
             .filter((user) => user.username && user.name && user.phoneNumber)
             .sort((a, b) => a.name.localeCompare(b.name)),
         });
+      }
+
+      // Only reached after authentication and role restrictions above.
+      if (adminExtension && actor.role !== 'convenor') {
+        const result = await adminExtension({ actor, method, rawPath, event });
+        if (result) return response(result.statusCode, result.body);
       }
 
       if (method === 'POST' && rawPath === '/admin/convenors') {
@@ -816,16 +995,22 @@ export function createHandler({
 
       if (method === 'POST' && rawPath === '/admin/content') {
         const body = parseBody(event);
-        if (body.type !== 'slideshow')
+        if (!['slideshow', 'image_slideshow'].includes(body.type))
           throw new HttpError(400, 'unsupported_content_type');
         const timestamp = now();
         const content = {
           contentId: newContentId(),
           title: validateTitle(body.title),
-          type: 'slideshow',
-          provider: 'google_slides',
+          type: body.type,
+          provider:
+            body.type === 'image_slideshow'
+              ? 'uploaded_images'
+              : 'google_slides',
           status: 'ready',
-          source: normaliseSlidesSource(body.url),
+          source:
+            body.type === 'image_slideshow'
+              ? await imageSlideshowSource(body, getContent)
+              : normaliseSlidesSource(body.url),
           createdAt: timestamp,
           createdBy: actor.email,
           updatedAt: timestamp,
@@ -904,6 +1089,7 @@ export function createHandler({
             url: upload.publicUrl,
             mimeType: upload.mimeType,
             expectedWidth: upload.width,
+            byteSize: upload.byteSize,
             expectedHeight: upload.height,
             sha256: upload.sha256,
           }),
@@ -933,6 +1119,20 @@ export function createHandler({
         };
         if (current.type === 'slideshow')
           updated.source = normaliseSlidesSource(body.url);
+        if (current.type === 'image_slideshow') {
+          updated.source = await imageSlideshowSource(body, getContent);
+          const devices = await listDevices();
+          for (const device of devices) {
+            if (
+              device.activeSelection?.contentId === adminContentId ||
+              device.schedule?.fallback?.contentId === adminContentId ||
+              device.schedule?.entries?.some(
+                (entry) => entry.contentId === adminContentId,
+              )
+            )
+              requireSourceCapability(device, updated.source);
+          }
+        }
         await putContent(updated, false);
         return response(200, { content: publicContent(updated) });
       }
@@ -946,7 +1146,8 @@ export function createHandler({
         const inUse = devices.some(
           (device) =>
             device.activeSelection?.contentId === adminContentId ||
-            device.source?.url === current.source?.url ||
+            (current.source?.url &&
+              device.source?.url === current.source.url) ||
             device.schedule?.fallback?.contentId === adminContentId ||
             device.schedule?.entries?.some(
               (entry) => entry.contentId === adminContentId,
@@ -954,6 +1155,20 @@ export function createHandler({
         );
         if (inUse)
           throw new HttpError(409, 'content_is_currently_on_a_display');
+        const savedContent = await listContent();
+        if (
+          savedContent.some(
+            (entry) =>
+              entry.source?.type === 'image_slideshow' &&
+              entry.source.slides.some(
+                (slide) => slide.contentId === adminContentId,
+              ),
+          )
+        )
+          throw new HttpError(
+            409,
+            'This image is used in an image slideshow. Remove it from the slideshow before deleting it.',
+          );
         await deleteContent(adminContentId);
         return response(200, { deleted: true });
       }
@@ -1023,6 +1238,7 @@ export function createHandler({
           validateSchedule(parseBody(event), getContent),
         ]);
         if (!current) throw new HttpError(404, 'device_not_found');
+        requireScheduleCapabilities(current, schedule);
         const timestamp = now();
         const item = {
           ...current,
@@ -1035,6 +1251,7 @@ export function createHandler({
           updatedAt: timestamp,
           updatedBy: actor.email,
         };
+        requireConfigImageBudget(item);
         const audit = {
           deviceId: current.deviceId,
           changedAt: `${timestamp}#${String(item.revision).padStart(12, '0')}`,
@@ -1233,7 +1450,7 @@ async function revokeControlSession(token) {
   );
 }
 
-export const handler = createHandler({
+export const defaultDependencies = {
   async getDevice(deviceId) {
     const result = await documentClient.send(
       new GetCommand({
@@ -1484,4 +1701,6 @@ export const handler = createHandler({
   verifyToken: verifyControlCredential,
   exchangeSession: exchangeControlSession,
   revokeSession: revokeControlSession,
-});
+};
+
+export const handler = createHandler(defaultDependencies);
