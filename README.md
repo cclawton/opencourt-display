@@ -6,6 +6,14 @@ Volunteers can keep using familiar tools such as Google Slides or upload finishe
 
 The project began at Heatherdale Tennis Club in Melbourne, Australia, but club names, court counts, schedules and content sources are intentionally configurable.
 
+## A look inside
+
+Demonstration screenshots of the shared control room and weekly scheduler. These use sample data and an upgraded example player; they do not expose club accounts or private member records. Captured from the public development branch on 30 October 2026; see the development-status note below for release availability.
+
+![Choose what each club TV displays](docs/screenshots/control-room.png)
+
+![Give each display its own weekly schedule](docs/screenshots/schedule.png)
+
 ## What is included today
 
 - A working committee demonstration with TV, control-room and first-boot views.
