@@ -56,7 +56,8 @@ def run(root, public_key):
                 token = uuid.uuid4().hex
                 health.unlink(missing_ok=True)
                 environment = {**os.environ, "OPENCOURT_HEALTH_FILE": str(health),
-                               "OPENCOURT_HEALTH_TOKEN": token}
+                               "OPENCOURT_HEALTH_TOKEN": token,
+                               "OPENCOURT_PLAYER_RELEASE": manager.state()["active"]}
                 child = subprocess.Popen([sys.executable, str(root / "current/opencourt-player")],
                                          env=environment)
                 started = time.monotonic()

@@ -1,5 +1,33 @@
 # Live Pi installer
 
+## Experimental player-only updater
+
+The new updater is under development; it is not part of `install.sh` and has no
+control-room button yet. See [the delivery and recovery plan](../../docs/REMOTE_PLAYER_UPDATES.md).
+
+`bootstrap-updater.sh` installs the stable supervisor once with root permission.
+Its payload must include the three Python tools, a separately trusted
+`release-public.pem`, and a signed `initial-release/` directory. Only the public
+verification key goes on the Pi. The signing private key remains with the
+release operator and must be backed up securely outside Git.
+
+Bootstrap saves the existing software and configuration in a root-only local
+backup, stages and verifies the initial release as the kiosk user, and installs
+a service override. The player HTML uses a stable link through the active release
+so image paths remain relative to the existing content directory. No OS package
+upgrade, Wi-Fi change or device re-enrolment is performed.
+
+Restore the former kiosk if needed:
+
+```bash
+sudo /var/backups/opencourt-before-updater/restore.sh
+```
+
+This restores software only and preserves live configuration and credentials.
+The bootstrap deliberately refuses to overwrite an existing bootstrap backup.
+Physical browser acceptance, service integration and interruption testing are
+required before using this experimental path on club displays.
+
 This directory is the Phase 1 installer for an already-flashed Raspberry Pi. It is intentionally separate from the reproducible image definition in `image/`.
 
 The installer:

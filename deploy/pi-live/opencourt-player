@@ -204,7 +204,7 @@ def device_diagnostics() -> dict[str, Any]:
             "operatingSystem": os_name or platform.system(),
             "kernel": platform.release(),
             "uptimeSeconds": uptime_seconds,
-            "playerVersion": "2026-10-18",
+            "playerVersion": os.environ.get("OPENCOURT_PLAYER_RELEASE", "2026-10-18"),
         },
         "network": {"primaryIp": _primary_ip()},
     }
