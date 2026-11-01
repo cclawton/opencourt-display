@@ -1,0 +1,120 @@
+#!/usr/bin/env python3
+"""Stable, unprivileged player supervisor. Cloud request transport is separate."""
+import argparse
+import json
+import os
+from pathlib import Path
+import signal
+import subprocess
+import sys
+import tempfile
+import time
+import uuid
+
+from player_activation import Activation
+from player_release import stage
+
+STOP = False
+PROBATION_SECONDS = 30
+STARTUP_TIMEOUT = 120
+TICK_SECONDS = 1
+
+
+def stop_requested(_signal, _frame):
+    global STOP
+    STOP = True
+
+
+def stop_child(child):
+    if child.poll() is None:
+        child.terminate()
+        try:
+            child.wait(timeout=20)
+        except subprocess.TimeoutExpired:
+            child.kill()
+            child.wait(timeout=5)
+
+
+def healthy(path, token, pid, now):
+    try:
+        value = json.loads(path.read_text())
+        return (value["token"] == token and value["pid"] == pid
+                and 0 <= now - value["monotonic"] < 90)
+    except (OSError, ValueError, KeyError, TypeError):
+        return False
+
+
+def run(root, public_key):
+    manager = Activation(root)
+    with manager.lock():
+        manager.recover()
+        child = None
+        health = root / "player-health.json"
+        request_path = root / "request.json"
+        try:
+            while not STOP:
+                token = uuid.uuid4().hex
+                health.unlink(missing_ok=True)
+                environment = {**os.environ, "OPENCOURT_HEALTH_FILE": str(health),
+                               "OPENCOURT_HEALTH_TOKEN": token}
+                child = subprocess.Popen([sys.executable, str(root / "current/opencourt-player")],
+                                         env=environment)
+                started = time.monotonic()
+                while not STOP:
+                    now = time.monotonic()
+                    state = manager.state()
+                    candidate = state["phase"] == "probation"
+                    alive = child.poll() is None
+                    ready = healthy(health, token, child.pid, now)
+                    if not alive or (now - started > STARTUP_TIMEOUT and not ready):
+                        stop_child(child)
+                        if candidate:
+                            manager.rollback()
+                            print("OpenCourt update failed; previous release restored", flush=True)
+                        else:
+                            time.sleep(3)
+                        break
+                    if candidate and now - started >= PROBATION_SECONDS and ready:
+                        manager.accept()
+                        print("OpenCourt player release accepted", flush=True)
+                    if not candidate and request_path.is_file():
+                        # Consume once. Future transport must write this file atomically.
+                        consumed = root / "processing.json"
+                        os.replace(request_path, consumed)
+                        try:
+                            if consumed.stat().st_size > 4096:
+                                raise ValueError("Oversized update request")
+                            request = json.loads(consumed.read_text())
+                            if set(request) != {"release", "request"}:
+                                raise ValueError("Invalid update request")
+                            release = manager.release(request["release"])
+                            # Reverify staged files immediately before activation.
+                            with tempfile.TemporaryDirectory(prefix=".verify-", dir=root) as scratch:
+                                stage(release, Path(scratch), public_key)
+                            if manager.begin(request["release"], request["request"]):
+                                stop_child(child)
+                                break
+                        except (ValueError, OSError, subprocess.SubprocessError) as error:
+                            print(f"OpenCourt update request rejected: {type(error).__name__}", flush=True)
+                            if manager.state()["phase"] == "probation":
+                                # An activation I/O error may follow the durable journal.
+                                # Never accept the old process as candidate health.
+                                stop_child(child)
+                                manager.recover()
+                                break
+                        finally:
+                            consumed.unlink(missing_ok=True)
+                    time.sleep(TICK_SECONDS)
+        finally:
+            if child is not None:
+                stop_child(child)
+
+
+if __name__ == "__main__":
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("--root", type=Path, required=True)
+    parser.add_argument("--public-key", type=Path, required=True)
+    args = parser.parse_args()
+    signal.signal(signal.SIGTERM, stop_requested)
+    signal.signal(signal.SIGINT, stop_requested)
+    run(args.root.resolve(), args.public_key.resolve())

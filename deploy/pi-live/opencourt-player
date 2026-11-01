@@ -13,6 +13,7 @@ import shutil
 import socket
 import subprocess
 import sys
+import time
 from datetime import datetime
 from threading import Event
 from typing import Any
@@ -32,6 +33,19 @@ MAX_CONFIG_IMAGE_BYTES = 100 * 1024 * 1024
 MAX_CONFIG_IMAGE_PIXELS = 64_000_000
 ASSET_DIR = CONTENT_DIR / "assets"
 STOP = Event()
+
+
+def report_local_health(browser: Any, active_url: str | None) -> None:
+    """Signal only after configuration was loaded and Chromium is alive."""
+    path = os.environ.get("OPENCOURT_HEALTH_FILE")
+    token = os.environ.get("OPENCOURT_HEALTH_TOKEN")
+    if not path or not token or not active_url or browser is None or browser.poll() is not None:
+        return
+    destination = Path(path)
+    temporary = destination.with_suffix(".tmp")
+    temporary.write_text(json.dumps({"pid": os.getpid(), "token": token,
+                                     "monotonic": time.monotonic()}))
+    temporary.replace(destination)
 
 
 class ConfigError(ValueError):
@@ -600,7 +614,11 @@ def main() -> int:
             except (ConfigError, HTTPError, json.JSONDecodeError, OSError, TypeError, ValueError) as error:
                 print(f"OpenCourt: remote update skipped: {error}", file=sys.stderr, flush=True)
 
-            STOP.wait(poll_seconds)
+            # Local watchdog health continues between cloud polls, including offline.
+            deadline = time.monotonic() + poll_seconds
+            while not STOP.is_set() and time.monotonic() < deadline:
+                report_local_health(browser, active_url)
+                STOP.wait(min(5, max(0, deadline - time.monotonic())))
     finally:
         stop_browser(browser)
 

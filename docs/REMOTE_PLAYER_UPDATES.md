@@ -19,11 +19,30 @@ The running kiosk PID, service start time and both active file hashes remained
 unchanged. Test artifacts are under `/tmp` on the device; they are not installed
 software and do not provide remote-update capability.
 
+The activation transaction and stable supervisor are now implemented as
+`player_activation.py` and `opencourt-update-supervisor`. An exclusive lifecycle
+lock prevents two supervisors. A durable probation journal precedes the atomic
+symlink switch. Restart during probation restores the previous release. The
+supervisor reverifies candidate signatures before activation, accepts a candidate
+after a 30-second probation with local health, and rolls back a crashed candidate
+or one without health after 120 seconds. The player writes a process/token-bound
+heartbeat while Chromium is alive and configuration has loaded. This does not
+prove browser page rendering or successful image decoding.
+
+Verification: all 39 Python tests passed locally; all 18 release, activation and
+watchdog tests passed on the actual Pi in an isolated `/tmp` directory. These
+include real fixture child processes, simulated activation/rollback write
+interruptions, duplicate last-request delivery, and exclusive locking. The live
+kiosk PID, start time and active file hashes remained unchanged. This is not a
+physical power-loss test and does not exercise the real Chromium startup path.
+
 Still required: release compatibility constraints beyond architecture, exact
 installed release reporting, network transport, trusted-key provisioning,
-exclusive supervisor locking, activation, readiness checks, durable rollback,
-API/admin UI, and physical interruption/recovery testing. Test signing keys must
-not become production trust keys.
+bootstrap/service and HTML-path integration, explicit rollback of an accepted
+release, durable command history beyond the last request, browser rendering
+readiness, API/admin UI, and physical interruption/recovery testing. Test signing
+keys must not become production trust keys. The supervisor is not yet installed
+as a service or ready for production rollout.
 
 ## Outcome
 
