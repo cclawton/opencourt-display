@@ -322,7 +322,7 @@ function adminDevice(item) {
     updatedBy: item.updatedBy ?? null,
     lastConnectedAt: item.lastConnectedAt ?? null,
     diagnostics: item.diagnostics ?? null,
-    softwareUpdate: item.softwareUpdate ? { request: item.softwareUpdate.request, release: item.softwareUpdate.release, requestedAt: item.softwareUpdate.requestedAt, expiresAt: item.softwareUpdate.expiresAt } : null,
+    softwareUpdate: item.softwareUpdate ? { request: item.softwareUpdate.request, release: item.softwareUpdate.release, requestedAt: item.softwareUpdate.requestedAt, expiresAt: item.softwareUpdate.expiresAt, action: item.softwareUpdate.action ?? 'update' } : null,
     softwareReport: item.softwareReport ?? null,
     capabilities: item.diagnostics?.capabilities ?? item.capabilities ?? {},
   };
@@ -961,7 +961,7 @@ export function createHandler({
         const command = createSoftwareRequest({ device: current, body,
           releases: await listPlayerReleases(), baseUrl: assetPublicBaseUrl, actor, now: now() });
         await requestSoftwareUpdate(current.deviceId, current.softwareUpdate?.request ?? null, command, actor);
-        return response(202, { request: command.request, release: command.release });
+        return response(202, { request: command.request, release: command.release, action: command.action });
       }
 
       if (method === 'GET' && rawPath === '/admin/convenors') {
@@ -1510,7 +1510,7 @@ export const defaultDependencies = {
         ExpressionAttributeValues: { ':command': command, ...(previousRequest === null ? {} : { ':previous': previousRequest }) } } },
       { Put: { TableName: process.env.AUDIT_TABLE, Item: {
         deviceId, changedAt: `${command.requestedAt}#software-${command.request}`,
-        action: 'update_player_software', release: command.release,
+        action: command.action === 'rollback' ? 'rollback_player_software' : 'update_player_software', release: command.release,
         request: command.request, actorEmail: actor.email, actorSubject: actor.sub },
         ConditionExpression: 'attribute_not_exists(changedAt)' } },
     ] }));

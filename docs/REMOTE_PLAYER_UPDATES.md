@@ -292,3 +292,28 @@ major OS maintenance can still require attendance.
 Before cloud deployment, follow repository AWS rules: toolkit, identity/region,
 tests, TypeScript, synthesis, reviewed infrastructure diff, and confirmed target
 account and billing email. Preserve the existing club deployment composition.
+
+## Accepted-release restore test — 1 November
+
+The TEST control room now offers **Restore previous version** only when an
+operator-reviewed catalogue entry permits rollback from the installed release.
+The API validates the predecessor, separates rollback audit records from updates,
+and prevents reinstalling the currently installed release. No stable-supervisor
+refresh or additional privileged Pi installation was needed.
+
+The actual control-room restore from updater3 to the signed bridge3 baseline
+completed: the Pi accepted bridge3 and the interface acknowledged “Previous
+software restored.” Both configuration and remote-settings hashes were unchanged.
+The subsequent ordinary control-room update back to updater3 was also accepted;
+the service remained active and both settings hashes were unchanged.
+These releases contain identical player code, so this proves accepted-version
+switching and acknowledgement, not recovery from a visual regression.
+
+Validation for this change: 43 infrastructure/API tests, 13 private backend
+tests, 8 desktop/mobile software-panel tests and all 47 Python tests passed.
+Public/private TypeScript and builds passed; the private CDK diff retained data
+resources and changed Lambda code only. Deployment was TEST only.
+
+The signing-backup helper was tested with disposable keys. The operator then
+created an encrypted real-key backup on the Mac Mini and verified recovery
+against the device trust key. A verified independent copy remains outstanding.

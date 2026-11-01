@@ -88,3 +88,19 @@ test('terminal and expired commands stop delivery; reports must match current co
     softwareUpdate: { ...current.softwareUpdate, expiresAt: '2026-10-31T00:00:00.000Z' } }) });
   assert.equal(JSON.parse((await expired.handler(event('/devices/bar-prices-tv/software', 'GET', undefined, 'device-secret'))).body).request, null);
 });
+
+test('rollback only selects an approved predecessor of the installed release', async () => {
+  const previous = { release: 'player-previous', architecture: 'aarch64', rollbackOnly: true, rollbackFrom: [release.release] };
+  const current = { ...device, diagnostics: { ...device.diagnostics, system: { playerVersion: release.release } } };
+  const { handler, calls } = setup({ getDevice: async () => current, listPlayerReleases: async () => [release, previous] });
+  const result = await handler(event('/admin/devices/bar-prices-tv/software', 'POST', { release: previous.release, action: 'rollback' }));
+  assert.equal(result.statusCode, 202);
+  assert.equal(JSON.parse(result.body).action, 'rollback');
+  assert.equal(calls[0][2].action, 'rollback');
+  assert.equal(calls[0][2].release, previous.release);
+  assert.equal((await handler(event('/admin/devices/bar-prices-tv/software', 'POST', { release: previous.release }))).statusCode, 400);
+  assert.equal((await handler(event('/admin/devices/bar-prices-tv/software', 'POST', { release: release.release }))).statusCode, 409);
+  const wrong = setup({ getDevice: async () => ({ ...current, diagnostics: { ...current.diagnostics, system: { playerVersion: 'unapproved-release' } } }), listPlayerReleases: async () => [previous] });
+  assert.equal((await wrong.handler(event('/admin/devices/bar-prices-tv/software', 'POST', { release: previous.release, action: 'rollback' }))).statusCode, 409);
+  assert.equal(wrong.calls.length, 0);
+});

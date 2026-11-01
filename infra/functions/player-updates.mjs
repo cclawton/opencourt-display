@@ -40,6 +40,14 @@ export function createSoftwareRequest({ device, body, releases, baseUrl, actor, 
     throw new SoftwareError(409, 'This display needs a one-time software installation before it can receive remote updates.');
   const release = releases.find(item => item.release === body.release);
   if (!release) throw new SoftwareError(400, 'unknown_player_release');
+  if (release.release === device.diagnostics?.system?.playerVersion)
+    throw new SoftwareError(409, 'This software version is already installed.');
+  const action = body.action ?? 'update';
+  if (!['update', 'rollback'].includes(action)) throw new SoftwareError(400, 'invalid_software_action');
+  if (action === 'rollback') {
+    if (!release.rollbackOnly || !release.rollbackFrom?.includes(device.diagnostics?.system?.playerVersion))
+      throw new SoftwareError(409, 'No approved previous version is available for this display.');
+  } else if (release.rollbackOnly) throw new SoftwareError(400, 'Use Restore previous version for this release.');
   if (release.architecture !== device.diagnostics?.hardware?.architecture)
     throw new SoftwareError(409, 'release_not_compatible_with_display');
   if ((body.previousRequest ?? null) !== (device.softwareUpdate?.request ?? null))
@@ -49,7 +57,7 @@ export function createSoftwareRequest({ device, body, releases, baseUrl, actor, 
   const url = new URL(baseUrl);
   if (url.protocol !== 'https:' || url.username || url.password || url.search || url.hash ||
       !releasePattern.test(release.release)) throw new SoftwareError(503, 'release_catalogue_unavailable');
-  return { request: requestId, release: release.release,
+  return { request: requestId, release: release.release, action,
     bundleUrl: `${baseUrl.replace(/\/$/, '')}/player-releases/${release.release}/`,
     requestedAt: now, expiresAt: new Date(Date.parse(now) + 86400000).toISOString(),
     requestedBy: actor.email };

@@ -40,6 +40,24 @@ Key rotation or stable-supervisor maintenance is separate from routine player
 updates and currently requires operator access. Do not replace a device's trust
 key with one supplied inside an untrusted downloaded release.
 
+The repository also provides `scripts/player-signing-backup.sh`. Its `create`
+command verifies the master key against the separately trusted public key,
+creates an encrypted backup without overwriting an existing file, and tests
+recovery through an interactive OpenSSL prompt:
+
+```sh
+sh scripts/player-signing-backup.sh create \
+  --private-key /secure/release-private.pem \
+  --public-key /secure/release-public.pem \
+  --output /separate-backup/release-private.encrypted.pem
+```
+
+After copying it to another device or medium, use `verify --backup <copied-file>
+--public-key <trusted-public-key>` there. The helper never writes a decrypted
+private key. A successful same-device check does not establish an independent
+backup. On 1 November the operator completed the encrypted backup and local
+recovery check; verification of the independent copy is still pending.
+
 ## Publishing a release
 
 1. Freeze a reviewed core commit, run the relevant tests, and inspect the player
@@ -71,9 +89,12 @@ catalogue entry and is authenticated independently of public content retrieval.
   durable journal. Cloud connectivity is not required for this decision.
 - The initial bootstrap's root-only restore script restores the former kiosk
   software while preserving current content and credentials.
-- Rollback after a candidate has already been accepted still needs a verified
-  operator path through the control room before the production rollout gate is
-  satisfied. Automated readiness does not establish correct pixels.
+- After acceptance, an administrator can use **Restore previous version** when
+  the reviewed catalogue supplies a rollback target for the installed release.
+  The target is downloaded, verified and activated through the same mechanism;
+  content and schedules are kept. Rollback-only entries cannot be selected as
+  ordinary upgrades, and the API rejects an incompatible predecessor.
+  Automated readiness does not establish correct pixels.
 
 Never fix software rollback by resetting content revisions, copying another
 device's credential, or restoring a whole old cloud database over live club data.
