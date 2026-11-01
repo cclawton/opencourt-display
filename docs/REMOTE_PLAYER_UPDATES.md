@@ -135,13 +135,57 @@ command, so the completed update was not delivered again. The Pi reported
 `throttled=0x0`.
 
 This proves accepted-release recovery on a normal network after an abrupt power
-cycle. It does not yet prove offline cold boot or a physical power interruption
-during download, activation or probation.
+cycle. The subsequent interruption and kiosk-offline tests below provide
+additional evidence beyond this initial accepted-release reboot check.
+
+## Physical interruption during probation
+
+The signed, local-only acceptance candidate `test-interrupt-20261101` uses the
+normal renderer but deliberately omits its readiness signal. It cannot be
+accepted and automatically rolls back after the startup deadline if an operator
+does not intervene. It was not published in the control-room release catalogue.
+
+The candidate entered probation with updater3 recorded as its previous accepted
+release. The operator then disconnected and reconnected power during that
+window. A different boot ID confirmed a real reboot. The persisted probation
+journal caused updater3 to be restored automatically, with the interrupted test
+release recorded as failed. Fresh post-boot player health and unchanged device
+and remote configuration checksums were verified. This validates physical
+interruption recovery during the activation/probation transaction, rather than
+only recovery after a completed update.
+
+It does not yet prove a physical interruption during a partially downloaded
+release; interrupted-download retention is covered by automated transport tests.
+
+## Controlled offline-start test
+
+`deploy/pi-live/test-offline-start.sh` was prepared and run by the operator on
+the home test Pi. It uses a
+kiosk-only systemd network namespace and a boot-enabled three-minute recovery
+timer. Host SSH, saved Wi-Fi and player/configuration files are unchanged. The
+operator ran the helper with sudo. The active kiosk service reported
+`PrivateNetwork=yes` and fresh health while host SSH remained available. Direct
+inspection of the privileged network namespace was denied by the OS; the active
+service setting was used as the isolation evidence. After a physical power cycle,
+a new boot ID, the same network-isolation setting and fresh post-boot health were
+verified. The operator confirmed that the menu returned and changed pages while
+the kiosk remained isolated. The boot-enabled recovery timer then removed the isolation override and both
+temporary systemd units automatically, restarted the kiosk with
+`PrivateNetwork=no`, and fresh health resumed. Authenticated cloud access returned
+HTTP 200 with no pending command. Refreshing the signed-in TEST control room
+showed a new 6:55 pm connection after recovery. Device/remote configuration
+checksums were unchanged; updater3 remained accepted and no throttling warnings
+were reported. This
+tests offline kiosk startup with host networking still available, not OS boot
+with the Wi-Fi access point absent.
 
 Still required before production: explicit rollback of an accepted release,
 browser rendering
-readiness, a documented secure signing-key backup/recovery procedure, and physical
-interruption/recovery testing. The updater is not ready for production rollout.
+readiness, a verified independent signing-key backup/recovery exercise, and the
+remaining acceptance coverage (including a physical interruption during download,
+boot with the Wi-Fi access point absent, and the legacy content/resolution cases).
+The signing-key and publishing procedure is documented in
+[Player release operations](PLAYER_RELEASE_OPERATIONS.md). The updater is not ready for production rollout.
 
 ## Outcome
 

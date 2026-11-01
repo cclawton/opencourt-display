@@ -39,6 +39,8 @@ class UpdateWatchdogTests(unittest.TestCase):
             self.assertFalse(WATCHDOG.healthy(path, "stale", 1, 101))
             self.assertFalse(WATCHDOG.healthy(path, "fresh", 2, 101))
             self.assertFalse(WATCHDOG.healthy(path, "fresh", 1, 200))
+            # A persisted heartbeat from a previous boot can be in the future.
+            self.assertFalse(WATCHDOG.healthy(path, "fresh", 1, 99))
 
     def exercise(self, candidate, expected):
         with tempfile.TemporaryDirectory() as directory:

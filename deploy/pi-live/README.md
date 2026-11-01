@@ -28,6 +28,32 @@ The bootstrap deliberately refuses to overwrite an existing bootstrap backup.
 Physical browser acceptance, service integration and interruption testing are
 required before using this experimental path on club displays.
 
+### Controlled offline-start check (test appliance only)
+
+`test-offline-start.sh` temporarily applies `PrivateNetwork=yes` to the kiosk
+service only. The host's Wi-Fi, SSH and saved credentials remain unchanged.
+An enabled recovery timer removes the test override and restarts the kiosk with
+normal networking after about three minutes. The timer starts again on boot, so
+power cycling during the test does not lose automatic recovery.
+
+Run with sudo only on the designated test appliance, then inspect the cached
+slideshow and, when directed, power-cycle it to check offline kiosk startup.
+Verify the kiosk has its own network namespace, fresh local health and the
+expected cached content. Afterwards verify the override and temporary timer
+have been removed, normal cloud access has returned, and no credentials or
+content changed. This is kiosk network isolation; it does not test OS boot with
+the Wi-Fi access point absent.
+
+Manual early recovery:
+
+```bash
+sudo sh /var/lib/opencourt-offline-recovery/restore.sh
+```
+
+The script refuses to overwrite an already configured offline test. It never
+changes the normal player release or enrolment. Use the normal software backup
+and rollback procedure for those.
+
 This directory is the Phase 1 installer for an already-flashed Raspberry Pi. It is intentionally separate from the reproducible image definition in `image/`.
 
 The installer:
