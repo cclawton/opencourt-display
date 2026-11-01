@@ -1,10 +1,10 @@
 # Remote player updates — implementation plan
 
-Status: experimental implementation and TEST deployment, 1 November 2026.
-The local mechanism and cloud polling are installed on the home Pi. A real
-update requested through the TEST control room completed successfully, including
-signed download, activation, probation and cloud acknowledgement. Production is
-unchanged.
+Status: experimental implementation; private pilot backend promoted on 1 November
+and home display moved to production on 2 November 2026. The operator confirmed
+the production slideshow runs. Existing club displays retain their prior players
+until individual on-site bootstrap. TEST update, rollback and recovery evidence
+is retained below; promotion does not establish fleet-wide acceptance.
 
 ## Completed foundation
 
@@ -350,3 +350,21 @@ remote-settings hashes were unchanged. Production was inspected read-only; no
 club display content, schedule or software was changed. Headless browser checks
 do not replace physical kiosk/HDMI acceptance or checking the existing devices'
 Chromium versions before their one-time bootstrap.
+
+## Private pilot production handoff — 2 November
+
+The operator ran the paired environment handoff on the home Bar Prices TV. It
+retained accepted updater3, trust key, Wi-Fi and SSH access while moving only
+the device configuration and remote credential to the prepared production pair.
+The production control room reported both capabilities, then its normal Show on
+TV action selected the three-page image slideshow. The Pi accepted revision 2,
+reported fresh health, and the operator confirmed the slideshow was running.
+The two existing club displays' configuration and enrolment fields remained
+identical to the before-cutover snapshot. Physical output/compatibility acceptance
+for those appliances remains an on-site task.
+
+Before the handoff, the operator reported a Wi-Fi/SSH outage while cached slides
+continued playing; power-cycling restored association. No persistent previous-boot
+journal was available, so the cause is unknown. Current health and power checks
+passed. Do not describe the outage as diagnosed or fixed. Controlled production
+reboot verification is requested separately.
