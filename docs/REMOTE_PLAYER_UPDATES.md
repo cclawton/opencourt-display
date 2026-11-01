@@ -1,9 +1,10 @@
 # Remote player updates — implementation plan
 
 Status: experimental implementation and TEST deployment, 1 November 2026.
-The local mechanism is installed on the home Pi. The TEST backend and interface
-now support software commands; end-to-end control-room activation awaits the
-operator-assisted supervisor refresh described below. Production is unchanged.
+The local mechanism and cloud polling are installed on the home Pi. A real
+update requested through the TEST control room completed successfully, including
+signed download, activation, probation and cloud acknowledgement. Production is
+unchanged.
 
 ## Completed foundation
 
@@ -107,18 +108,22 @@ authentication, runtime settings and private club composition were preserved.
 The actual Pi successfully authenticated to the deployed software endpoint and
 downloaded/verified `player-2026.11.01-updater3` from TEST CloudFront into an
 isolated directory, including its signature and OS/browser checks. The signed-in
-TEST browser shows the new information panel. No control-room update has yet been
-issued against the real Pi.
+TEST browser shows the new information panel. The operator then completed the supervisor refresh. A signed-in administrator
+requested updater3 through the real TEST control-room button. The Pi downloaded
+and accepted that release, reported completion, and the server stopped delivering
+the completed command. The live interface showed “Software update complete.”
+Fresh local health and unchanged device/remote configuration checksums were
+verified after completion. Menu configuration remained revision 29.
 
 The transport code lives in the stable supervisor rather than the replaceable
 player, so the first local-only prototype needs an operator-assisted refresh.
-`refresh-updater.sh` is prepared on the home Pi. It retains the trusted public key,
+`refresh-updater.sh` was run successfully by the operator on the home Pi. It retains the trusted public key,
 backs up the stable tools, bounds the service stop timeout, and requests a signed
 bridge release. It requires the operator's sudo password. This is TEST
 development; the final club bootstrap will include transport from the start.
 
-Still required before production: end-to-end control-room update and progress
-verification, explicit rollback of an accepted release, browser rendering
+Still required before production: explicit rollback of an accepted release,
+browser rendering
 readiness, a documented secure signing-key backup/recovery procedure, and physical
 interruption/recovery testing. The updater is not ready for production rollout.
 
