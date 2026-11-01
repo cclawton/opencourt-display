@@ -34,7 +34,8 @@ cmp /tmp/recovered-release-public.pem /secure/release-public.pem
 
 Record who can recover the key and where the encrypted backup and passphrase are
 kept. The backup is not verified until this comparison succeeds from the copied
-file. No verified independent backup has been recorded for the pilot yet.
+file. On 1 November the operator verified an independent encrypted copy on a second
+Mac; its recovered public-key SHA-256 matched the installed trust key.
 
 Key rotation or stable-supervisor maintenance is separate from routine player
 updates and currently requires operator access. Do not replace a device's trust
@@ -56,7 +57,8 @@ After copying it to another device or medium, use `verify --backup <copied-file>
 --public-key <trusted-public-key>` there. The helper never writes a decrypted
 private key. A successful same-device check does not establish an independent
 backup. On 1 November the operator completed the encrypted backup and local
-recovery check; verification of the independent copy is still pending.
+recovery check; the independent copy was subsequently verified on the MacBook Air with a matching
+public-key SHA-256 fingerprint.
 
 ## Publishing a release
 

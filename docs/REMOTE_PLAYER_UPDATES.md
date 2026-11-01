@@ -316,4 +316,6 @@ resources and changed Lambda code only. Deployment was TEST only.
 
 The signing-backup helper was tested with disposable keys. The operator then
 created an encrypted real-key backup on the Mac Mini and verified recovery
-against the device trust key. A verified independent copy remains outstanding.
+against the device trust key. The operator subsequently verified the copied encrypted file on the MacBook Air;
+its recovered public-key SHA-256 exactly matched the installed trust key. The
+independent signing-key backup gate is complete.
