@@ -36,13 +36,44 @@ interruptions, duplicate last-request delivery, and exclusive locking. The live
 kiosk PID, start time and active file hashes remained unchanged. This is not a
 physical power-loss test and does not exercise the real Chromium startup path.
 
-Still required: release compatibility constraints beyond architecture, exact
-installed release reporting, network transport, trusted-key provisioning,
-bootstrap/service and HTML-path integration, explicit rollback of an accepted
-release, durable command history beyond the last request, browser rendering
-readiness, API/admin UI, and physical interruption/recovery testing. Test signing
-keys must not become production trust keys. The supervisor is not yet installed
-as a service or ready for production rollout.
+## Real kiosk acceptance on Bar Prices TV
+
+On 1 November the operator ran the one-time privileged bootstrap. The stable
+tools and public verification key are root-owned under `/opt/opencourt-updater`.
+The kiosk service override launches the unprivileged supervisor inside Cage.
+The HTML path remains `/var/lib/opencourt/player.html`, linked through
+`software/current` so existing relative image references work. The player now
+reports its exact release ID through the existing diagnostics field.
+
+- Initial release `player-2026.11.01-updater1` bootstrapped successfully and
+  reported fresh local health. The operator confirmed the menu looked correct.
+- A second signed release, `player-2026.11.01-updater2`, was requested through
+  the local request file and accepted after probation with the real Chromium
+  kiosk running.
+- Signed `test-failure-2026.11.01` deliberately exited with status 42. The
+  supervisor automatically restored updater2, recorded the failed release, and
+  the restored player reported fresh health.
+- SHA-256 checks of both device configuration and remote settings were identical
+  before and after the tests. Credentials were not printed or transferred.
+- All changes were on the home TEST Pi. The existing club displays and cloud
+  infrastructure were unchanged.
+
+The signing private key is retained only in an ignored, restrictive local export
+directory on the operator's Mac. A secure independent backup and the production
+release-signing/key-recovery procedure still need to be established. Temporary
+test keys from the earlier staging proof were not used for the installed trust
+key. The local backup restore command is documented in the Pi installer README.
+
+The previous kiosk took the systemd 90-second stop timeout during bootstrap.
+Normal player-to-player activation succeeded without that service restart.
+Service stop/reboot behaviour still needs acceptance testing.
+
+Still required: release compatibility constraints beyond architecture, network
+transport, explicit rollback of an accepted release, durable command history
+beyond the last request, browser rendering readiness, API/admin UI, and physical
+interruption/recovery testing. The updater is experimental and is not ready for
+production rollout. Its local mechanism is installed on the home test Pi, but
+administrators cannot yet request updates through the control room.
 
 ## Outcome
 
