@@ -319,3 +319,34 @@ created an encrypted real-key backup on the Mac Mini and verified recovery
 against the device trust key. The operator subsequently verified the copied encrypted file on the MacBook Air;
 its recovered public-key SHA-256 exactly matched the installed trust key. The
 independent signing-key backup gate is complete.
+
+## Playback compatibility checks — 1 November
+
+All 47 Python regression tests passed again. Additional isolated rendering
+checks used the installed signed player HTML and the home Pi's actual Chromium
+155, with separate temporary profiles; the running kiosk was not reconfigured.
+
+- A valid 3840×2160 PNG decoded and remained static. A one-image slideshow
+  remained visible, and a two-image slideshow returned to its first image in
+  order. Real-time checks confirmed each new image reached full opacity and
+  the previous DOM image was removed after the crossfade.
+- Missing images and mismatched expected dimensions produced the intended
+  error messages. A separate Mac Chromium run passed the same checks.
+- An existing public club Google Slides presentation rendered correctly without
+  sign-in in isolated Pi Chromium. Its screenshot was inspected. This checks
+  viewer loading/rendering, not advancement through a multi-slide Google deck.
+- The installed Python player's main loop was exercised with controlled
+  Melbourne schedule times and browser-process stubs. It switched fallback
+  image → scheduled image → Google Slides → midnight fallback without changing
+  the revision. This is controlled-clock integration evidence, not a wall-clock
+  test of the live club schedule.
+- The retained legacy honours installer JPEG decoded at 3840×2160 and rendered
+  correctly in a 3840×2160 Pi browser viewport; its screenshot was inspected.
+  This is not verification of the current production image bytes or physical
+  4K HDMI output. Verify the actual Bar Room TV output at installation.
+
+The kiosk service remained active on accepted updater3. Configuration and
+remote-settings hashes were unchanged. Production was inspected read-only; no
+club display content, schedule or software was changed. Headless browser checks
+do not replace physical kiosk/HDMI acceptance or checking the existing devices'
+Chromium versions before their one-time bootstrap.
