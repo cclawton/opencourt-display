@@ -157,6 +157,8 @@ export const test = base.extend<{
           failure = '';
           return route.fulfill({ status: 409, json: { error } });
         }
+        if (method === 'GET' && url.pathname === '/admin/player-releases')
+          return route.fulfill({ json: { releases: [] } });
         if (method === 'GET' && url.pathname === '/admin/content')
           return route.fulfill({ json: { content } });
         if (method === 'GET' && url.pathname === '/admin/convenors')

@@ -26,7 +26,9 @@ export type DisplaySource =
   | { type: 'image_slideshow'; slides: ImageSource[]; durationSeconds: number };
 
 export type RemoteDevice = {
-  capabilities?: { local_image_slideshow?: number };
+  capabilities?: { local_image_slideshow?: number; remote_player_updates?: number };
+  softwareUpdate?: { request: string; release: string; requestedAt: string; expiresAt: string } | null;
+  softwareReport?: { request: string; status: 'downloading' | 'checking' | 'restarting' | 'complete' | 'failed'; activeRelease: string | null; reportedAt: string } | null;
   schemaVersion: number;
   deviceId: string;
   revision: number;

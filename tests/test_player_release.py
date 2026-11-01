@@ -94,3 +94,15 @@ class SignedPlayerReleaseTests(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, "identifier"):
             RELEASE.build(SOURCE, self.root / "bad", "../escape", self.private)
 
+    def test_signed_compatibility_rejects_unsupported_os_and_chromium(self):
+        from types import SimpleNamespace
+        manifest = {'schemaVersion': 2, 'compatibility': {'debianMajor': 13, 'chromiumMajor': 155}}
+        with patch.object(RELEASE.platform, 'freedesktop_os_release', return_value={'ID': 'debian', 'VERSION_ID': '12'}):
+            with self.assertRaisesRegex(ValueError, 'operating system'):
+                RELEASE.check_compatibility(manifest)
+        with patch.object(RELEASE.platform, 'freedesktop_os_release', return_value={'ID': 'debian', 'VERSION_ID': '13'}), patch.object(RELEASE.subprocess, 'run', return_value=SimpleNamespace(stdout='Chromium 154.1.2')):
+            with self.assertRaisesRegex(ValueError, 'Chromium'):
+                RELEASE.check_compatibility(manifest)
+        with patch.object(RELEASE.platform, 'freedesktop_os_release', return_value={'ID': 'debian', 'VERSION_ID': '13'}), patch.object(RELEASE.subprocess, 'run', return_value=SimpleNamespace(stdout='Chromium 155.0.8059.39')):
+            RELEASE.check_compatibility(manifest)
+

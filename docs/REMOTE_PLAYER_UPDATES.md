@@ -1,7 +1,9 @@
 # Remote player updates — implementation plan
 
-Status: implementation started, 1 November 2026. Remote updates are not yet
-available. No active player or cloud deployment has been changed.
+Status: experimental implementation and TEST deployment, 1 November 2026.
+The local mechanism is installed on the home Pi. The TEST backend and interface
+now support software commands; end-to-end control-room activation awaits the
+operator-assisted supervisor refresh described below. Production is unchanged.
 
 ## Completed foundation
 
@@ -68,12 +70,57 @@ The previous kiosk took the systemd 90-second stop timeout during bootstrap.
 Normal player-to-player activation succeeded without that service restart.
 Service stop/reboot behaviour still needs acceptance testing.
 
-Still required: release compatibility constraints beyond architecture, network
-transport, explicit rollback of an accepted release, durable command history
-beyond the last request, browser rendering readiness, API/admin UI, and physical
-interruption/recovery testing. The updater is experimental and is not ready for
-production rollout. Its local mechanism is installed on the home test Pi, but
-administrators cannot yet request updates through the control room.
+## Cloud transport and TEST control room
+
+Implemented and deployed to TEST on 1 November:
+
+- Administrators can choose one published release for one display from its
+  information panel. Convenors cannot request software updates. Older players
+  receive a useful explanation of the one-time installation requirement.
+- Signed release files use the existing website bucket and CloudFront. The
+  reviewed catalogue is bundled with the API; arbitrary administrator-supplied
+  software URLs are not accepted. Signing keys and device credentials are never
+  release assets.
+- A device authenticates software polling/reporting with its own existing
+  credential. Commands expire after 24 hours. Conditional command writes and
+  audit records are independent of content revisions. Content updates preserve
+  concurrent health/software fields instead of replacing the whole device item.
+- The supervisor polls over outbound HTTPS; fixed filenames, bounded responses
+  and no redirects prevent archive extraction and credential forwarding. A
+  signature is checked before staging or activation. Existing release files must
+  be byte-identical to the verified download before reuse.
+- New CLI-built signed manifests constrain Debian major version and Chromium
+  major version as well as architecture. The current TEST release is deliberately
+  restricted to Debian 13 and Chromium 155. Schema-1 local test releases remain
+  readable for migration; they have no OS/browser compatibility constraints.
+- Durable handled-request history prevents older commands from activating again.
+  A deliberate 4096-request limit fails closed and requires operator maintenance.
+
+Verification: 45 Python tests, 42 infrastructure/API tests, 13 private backend
+tests, and 32 desktop/mobile browser tests passed. Public/private TypeScript and
+frontend builds passed. The private CDK synthesis and template diff changed only
+Lambda code. The deployed change set also contained the expected dynamic URL and
+invocation-permission references to that same function, with no data-resource
+changes. The TEST stack reached UPDATE_COMPLETE. Existing account, billing,
+authentication, runtime settings and private club composition were preserved.
+
+The actual Pi successfully authenticated to the deployed software endpoint and
+downloaded/verified `player-2026.11.01-updater3` from TEST CloudFront into an
+isolated directory, including its signature and OS/browser checks. The signed-in
+TEST browser shows the new information panel. No control-room update has yet been
+issued against the real Pi.
+
+The transport code lives in the stable supervisor rather than the replaceable
+player, so the first local-only prototype needs an operator-assisted refresh.
+`refresh-updater.sh` is prepared on the home Pi. It retains the trusted public key,
+backs up the stable tools, bounds the service stop timeout, and requests a signed
+bridge release. It requires the operator's sudo password. This is TEST
+development; the final club bootstrap will include transport from the start.
+
+Still required before production: end-to-end control-room update and progress
+verification, explicit rollback of an accepted release, browser rendering
+readiness, a documented secure signing-key backup/recovery procedure, and physical
+interruption/recovery testing. The updater is not ready for production rollout.
 
 ## Outcome
 

@@ -16,6 +16,7 @@ import {
   UserPlus,
 } from 'lucide-react';
 
+import { PlayerSoftwareUpdate } from '@/components/player-software-update';
 import { ImageSlideshowEditor } from '@/components/image-slideshow-editor';
 import { GoogleSignIn, signOutGoogle } from '@/components/google-sign-in';
 import { clubExtensions } from '@club-extensions';
@@ -955,6 +956,11 @@ export function DeployedControlRoom({ config }: { config: RuntimeConfig }) {
                             'Unknown'}
                         </dd>
                       </dl>
+                      {actor?.role === 'admin' && token && device && (
+                        <div className="mt-4"><PlayerSoftwareUpdate key={device.deviceId} config={config} token={token}
+                          deviceId={device.deviceId}
+                          displayName={config.devices.find(item => item.deviceId === device.deviceId)?.name ?? device.deviceId} /></div>
+                      )}
                     </div>
                   </div>
                 )}

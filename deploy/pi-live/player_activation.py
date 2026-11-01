@@ -86,14 +86,18 @@ class Activation:
         state = self.state()
         if not state or state["phase"] != "accepted":
             raise ValueError("No accepted baseline; recover pending transaction first")
-        if request == state["lastRequest"]:
+        handled = state.get("handledRequests", [])
+        if request == state["lastRequest"] or request in handled:
             return False
+        if len(handled) >= 4096:
+            raise ValueError("Update request history needs maintenance")
         if release == state["active"]:
             return False
         if release == state["failed"]:
             raise ValueError("Failed release requires a new corrected release identifier")
         # Journal BEFORE changing current. Reboot at either step restores baseline.
         self.save({**state, "phase": "probation", "active": release,
+                   "handledRequests": [*handled, request],
                    "previous": state["active"], "request": request})
         self.switch(release)
         return True

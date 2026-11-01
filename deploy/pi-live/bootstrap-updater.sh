@@ -10,7 +10,7 @@ dropin=/etc/systemd/system/opencourt-kiosk.service.d/20-updater.conf
 [ ! -e "$root/activation.json" ] || { echo 'Updater already initialised.' >&2; exit 1; }
 [ ! -e "$backup" ] || { echo 'Existing bootstrap backup found; inspect before retrying.' >&2; exit 1; }
 [ ! -e "$dropin" ] || { echo 'Existing updater service override found.' >&2; exit 1; }
-for name in player_release.py player_activation.py opencourt-update-supervisor release-public.pem; do
+for name in player_release.py player_activation.py player_transport.py opencourt-update-supervisor release-public.pem; do
     [ -f "$payload/$name" ] || { echo "Missing payload: $name" >&2; exit 1; }
 done
 test -f "$payload/initial-release/manifest.json"
@@ -45,7 +45,7 @@ restore_on_error() {
 }
 trap restore_on_error EXIT
 install -d -m 0755 "$tools"
-for name in player_release.py player_activation.py opencourt-update-supervisor release-public.pem; do
+for name in player_release.py player_activation.py player_transport.py opencourt-update-supervisor release-public.pem; do
     install -m 0644 "$payload/$name" "$tools/$name"
 done
 install -d -o opencourt -g opencourt -m 0755 "$root" "$root/releases"

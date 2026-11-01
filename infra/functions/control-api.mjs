@@ -1,3 +1,5 @@
+import { playerReleases } from './player-releases.mjs';
+import { SoftwareError, authenticatePlayer, createSoftwareRequest, publicSoftwareReport, softwareCommand } from './player-updates.mjs';
 import { DynamoDBClient } from '@aws-sdk/client-dynamodb';
 import {
   DeleteCommand,
@@ -320,6 +322,8 @@ function adminDevice(item) {
     updatedBy: item.updatedBy ?? null,
     lastConnectedAt: item.lastConnectedAt ?? null,
     diagnostics: item.diagnostics ?? null,
+    softwareUpdate: item.softwareUpdate ? { request: item.softwareUpdate.request, release: item.softwareUpdate.release, requestedAt: item.softwareUpdate.requestedAt, expiresAt: item.softwareUpdate.expiresAt } : null,
+    softwareReport: item.softwareReport ?? null,
     capabilities: item.diagnostics?.capabilities ?? item.capabilities ?? {},
   };
 }
@@ -356,6 +360,7 @@ function validateDiagnostics(body) {
     ...(body?.capabilities
       ? {
           capabilities: {
+            remote_player_updates: body.capabilities.remote_player_updates === 1 ? 1 : 0,
             local_image_slideshow:
               body.capabilities.local_image_slideshow === 1 ? 1 : 0,
           },
@@ -845,6 +850,10 @@ export function createHandler({
   createConvenor,
   deleteConvenor,
   reportDeviceStatus,
+  requestSoftwareUpdate,
+  reportSoftwareUpdate,
+  listPlayerReleases = async () => playerReleases,
+  assetPublicBaseUrl = process.env.ASSET_PUBLIC_BASE_URL,
   now = () => new Date().toISOString(),
   newAssetId = randomUUID,
   newContentId = randomUUID,
@@ -894,6 +903,19 @@ export function createHandler({
         }
       }
 
+      const softwareMatch = rawPath.match(/^\/devices\/([a-z0-9][a-z0-9-]{1,62})\/software$/);
+      if (softwareMatch && ['GET', 'POST'].includes(method)) {
+        const deviceId = softwareMatch[1];
+        const current = await getDevice(deviceId);
+        authenticatePlayer(current, bearerToken(event?.headers));
+        if (method === 'GET') return response(200, { request: softwareCommand(current, now()) });
+        if (!reportSoftwareUpdate) throw new HttpError(404, 'not_found');
+        const report = publicSoftwareReport(parseBody(event));
+        if (report.request !== current.softwareUpdate?.request) throw new HttpError(409, 'software_request_changed_retry');
+        await reportSoftwareUpdate(deviceId, current.statusTokenHash, { ...report, reportedAt: now() });
+        return response(200, { accepted: true });
+      }
+
       const statusDeviceId = deviceIdFromStatusPath(rawPath);
       if (method === 'POST' && statusDeviceId) {
         if (!reportDeviceStatus) throw new HttpError(404, 'not_found');
@@ -926,6 +948,20 @@ export function createHandler({
           method === 'PUT' && Boolean(deviceIdFromSchedulePath(rawPath));
         if (!allowedRead && !allowedAction && !allowedSchedule)
           throw new HttpError(403, 'admin_access_required');
+      }
+
+      if (method === 'GET' && rawPath === '/admin/player-releases') {
+        return response(200, { releases: await listPlayerReleases() });
+      }
+      const softwareAdminMatch = rawPath.match(/^\/admin\/devices\/([a-z0-9][a-z0-9-]{1,62})\/software$/);
+      if (method === 'POST' && softwareAdminMatch) {
+        if (!requestSoftwareUpdate) throw new HttpError(404, 'not_found');
+        const body = parseBody(event);
+        const current = await getDevice(softwareAdminMatch[1]);
+        const command = createSoftwareRequest({ device: current, body,
+          releases: await listPlayerReleases(), baseUrl: assetPublicBaseUrl, actor, now: now() });
+        await requestSoftwareUpdate(current.deviceId, current.softwareUpdate?.request ?? null, command, actor);
+        return response(202, { request: command.request, release: command.release });
       }
 
       if (method === 'GET' && rawPath === '/admin/convenors') {
@@ -1323,8 +1359,10 @@ export function createHandler({
         );
       return response(404, { error: 'not_found' });
     } catch (error) {
-      if (error instanceof HttpError)
+      if (error instanceof HttpError || error instanceof SoftwareError)
         return response(error.statusCode, { error: error.message });
+      if (error?.name === 'ConditionalCheckFailedException')
+        return response(409, { error: 'software_request_changed_retry' });
       if (error?.name === 'TransactionCanceledException')
         return response(409, { error: 'display_changed_retry' });
       console.error('control_api_error', error);
@@ -1456,10 +1494,35 @@ export const defaultDependencies = {
       new GetCommand({
         TableName: process.env.DEVICE_CONFIG_TABLE,
         Key: { deviceId },
-        ConsistentRead: false,
+        ConsistentRead: true,
       }),
     );
     return result.Item;
+  },
+  async requestSoftwareUpdate(deviceId, previousRequest, command, actor) {
+    await documentClient.send(new TransactWriteCommand({ TransactItems: [
+      { Update: { TableName: process.env.DEVICE_CONFIG_TABLE, Key: { deviceId },
+        UpdateExpression: 'SET softwareUpdate = :command',
+        ConditionExpression: previousRequest === null
+          ? 'attribute_exists(deviceId) AND attribute_not_exists(softwareUpdate)'
+          : 'softwareUpdate.#request = :previous',
+        ExpressionAttributeNames: previousRequest === null ? undefined : { '#request': 'request' },
+        ExpressionAttributeValues: { ':command': command, ...(previousRequest === null ? {} : { ':previous': previousRequest }) } } },
+      { Put: { TableName: process.env.AUDIT_TABLE, Item: {
+        deviceId, changedAt: `${command.requestedAt}#software-${command.request}`,
+        action: 'update_player_software', release: command.release,
+        request: command.request, actorEmail: actor.email, actorSubject: actor.sub },
+        ConditionExpression: 'attribute_not_exists(changedAt)' } },
+    ] }));
+  },
+  async reportSoftwareUpdate(deviceId, tokenHash, report) {
+    await documentClient.send(new UpdateCommand({
+      TableName: process.env.DEVICE_CONFIG_TABLE, Key: { deviceId },
+      UpdateExpression: 'SET softwareReport = :report',
+      ConditionExpression: 'statusTokenHash = :token AND softwareUpdate.#request = :request',
+      ExpressionAttributeNames: { '#request': 'request' },
+      ExpressionAttributeValues: { ':report': report, ':token': tokenHash, ':request': report.request },
+    }));
   },
   async getProgramme(programmeId) {
     const result = await documentClient.send(
@@ -1618,17 +1681,23 @@ export const defaultDependencies = {
     );
   },
   async updateDevice({ previousRevision, item, audit }) {
+    // Content changes must not overwrite concurrent device health/software reports.
+    const protectedFields = new Set(['deviceId', 'statusTokenHash', 'diagnostics',
+      'lastConnectedAt', 'softwareUpdate', 'softwareReport']);
+    const fields = Object.keys(item).filter(key => !protectedFields.has(key));
+    const names = Object.fromEntries(fields.map((key, i) => [`#field${i}`, key]));
+    const values = Object.fromEntries(fields.map((key, i) => [`:field${i}`, item[key]]));
     await documentClient.send(
       new TransactWriteCommand({
         TransactItems: [
           {
-            Put: {
+            Update: {
               TableName: process.env.DEVICE_CONFIG_TABLE,
-              Item: item,
+              Key: { deviceId: item.deviceId },
+              UpdateExpression: `SET ${fields.map((_, i) => `#field${i} = :field${i}`).join(', ')}`,
               ConditionExpression: 'revision = :previousRevision',
-              ExpressionAttributeValues: {
-                ':previousRevision': previousRevision,
-              },
+              ExpressionAttributeNames: names,
+              ExpressionAttributeValues: { ...values, ':previousRevision': previousRevision },
             },
           },
           {

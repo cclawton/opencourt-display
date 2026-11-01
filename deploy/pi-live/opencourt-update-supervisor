@@ -13,6 +13,7 @@ import uuid
 
 from player_activation import Activation
 from player_release import stage
+from player_transport import poll
 
 STOP = False
 PROBATION_SECONDS = 30
@@ -51,13 +52,15 @@ def run(root, public_key):
         child = None
         health = root / "player-health.json"
         request_path = root / "request.json"
+        next_poll = 0
         try:
             while not STOP:
                 token = uuid.uuid4().hex
                 health.unlink(missing_ok=True)
                 environment = {**os.environ, "OPENCOURT_HEALTH_FILE": str(health),
                                "OPENCOURT_HEALTH_TOKEN": token,
-                               "OPENCOURT_PLAYER_RELEASE": manager.state()["active"]}
+                               "OPENCOURT_PLAYER_RELEASE": manager.state()["active"],
+                               "OPENCOURT_REMOTE_PLAYER_UPDATES": "1"}
                 child = subprocess.Popen([sys.executable, str(root / "current/opencourt-player")],
                                          env=environment)
                 started = time.monotonic()
@@ -78,6 +81,18 @@ def run(root, public_key):
                     if candidate and now - started >= PROBATION_SECONDS and ready:
                         manager.accept()
                         print("OpenCourt player release accepted", flush=True)
+                    if not candidate and now >= next_poll:
+                        next_poll = now + 60
+                        try:
+                            settings_path = Path(os.environ.get("OPENCOURT_REMOTE", "/var/lib/opencourt/remote.json"))
+                            if settings_path.is_file():
+                                settings = json.loads(settings_path.read_text())
+                                if not isinstance(settings, dict):
+                                    raise ValueError('Invalid remote settings')
+                                if settings.get('statusToken') and settings.get('statusUrl'):
+                                    poll(settings, root, public_key, manager.state())
+                        except (OSError, ValueError, subprocess.SubprocessError) as error:
+                            print(f"OpenCourt software polling deferred: {type(error).__name__}", flush=True)
                     if not candidate and request_path.is_file():
                         # Consume once. Future transport must write this file atomically.
                         consumed = root / "processing.json"

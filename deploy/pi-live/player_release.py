@@ -41,11 +41,14 @@ def no_duplicate_keys(pairs):
 
 def validate_manifest(data, architecture):
     manifest = json.loads(data, object_pairs_hook=no_duplicate_keys)
-    if not isinstance(manifest, dict) or set(manifest) != {
-        "schemaVersion", "release", "architecture", "files"
-    }:
+    if not isinstance(manifest, dict):
+        raise ValueError("Invalid manifest")
+    fields = {"schemaVersion", "release", "architecture", "files"}
+    if manifest.get("schemaVersion") == 2:
+        fields.add("compatibility")
+    if set(manifest) != fields:
         raise ValueError("Invalid manifest fields")
-    if type(manifest["schemaVersion"]) is not int or manifest["schemaVersion"] != 1:
+    if type(manifest["schemaVersion"]) is not int or manifest["schemaVersion"] not in (1, 2):
         raise ValueError("Unsupported manifest version")
     if not isinstance(manifest["release"], str) or not re.fullmatch(
         r"[a-zA-Z0-9][a-zA-Z0-9._-]{0,79}", manifest["release"]
@@ -53,6 +56,10 @@ def validate_manifest(data, architecture):
         raise ValueError("Invalid release identifier")
     if manifest["architecture"] != architecture:
         raise ValueError("Unsupported release architecture")
+    if manifest['schemaVersion'] == 2:
+        compatibility = manifest['compatibility']
+        if not isinstance(compatibility, dict) or set(compatibility) != {'debianMajor', 'chromiumMajor'} or any(type(v) is not int or v < 1 for v in compatibility.values()):
+            raise ValueError('Invalid compatibility constraints')
     if not isinstance(manifest["files"], dict) or set(manifest["files"]) != set(FILES):
         raise ValueError("Invalid release file allowlist")
     for entry in manifest["files"].values():
@@ -86,11 +93,13 @@ def sync_directory(path):
         os.close(descriptor)
 
 
-def build(source, destination, release, key, architecture="aarch64"):
+def build(source, destination, release, key, architecture="aarch64", compatibility=None):
     contents = {name: regular_bytes(source / name, MAX_FILE) for name in FILES}
     manifest = {"schemaVersion": 1, "release": release, "architecture": architecture,
                 "files": {name: {"size": len(data), "sha256": hashlib.sha256(data).hexdigest()}
                           for name, data in contents.items()}}
+    if compatibility is not None:
+        manifest.update(schemaVersion=2, compatibility=compatibility)
     encoded = (json.dumps(manifest, sort_keys=True, separators=(",", ":")) + "\n").encode()
     validate_manifest(encoded, architecture)
     destination.mkdir(parents=True, exist_ok=False)
@@ -104,6 +113,18 @@ def build(source, destination, release, key, architecture="aarch64"):
         shutil.rmtree(destination)
         raise
     return manifest
+
+
+def check_compatibility(manifest):
+    if manifest['schemaVersion'] == 2:
+        compatibility = manifest['compatibility']
+        os_release = platform.freedesktop_os_release()
+        if os_release.get('ID') not in ('debian', 'raspbian') or os_release.get('VERSION_ID', '').split('.')[0] != str(compatibility['debianMajor']):
+            raise ValueError('Unsupported operating system for release')
+        version = subprocess.run(['chromium', '--version'], check=True, capture_output=True, text=True, timeout=10).stdout
+        major = re.search(r'Chromium\s+(\d+)\.', version)
+        if not major or int(major[1]) != compatibility['chromiumMajor']:
+            raise ValueError('Unsupported Chromium version for release')
 
 
 def stage(bundle, releases, public_key, architecture=None):
@@ -122,6 +143,7 @@ def stage(bundle, releases, public_key, architecture=None):
         openssl("dgst", "-sha256", "-verify", public_key, "-signature",
                 scratch / "manifest.sig", scratch / "manifest.json")
     manifest = validate_manifest(encoded, architecture)
+    check_compatibility(manifest)
     releases.mkdir(parents=True, exist_ok=True)
     target = releases / manifest["release"]
     if target.exists() or target.is_symlink():
@@ -156,13 +178,16 @@ def main():
     package.add_argument("--release", required=True)
     package.add_argument("--private-key", type=Path, required=True)
     package.add_argument("--architecture", default="aarch64")
+    package.add_argument("--debian-major", type=int, default=13)
+    package.add_argument("--chromium-major", type=int, default=155)
     verify = commands.add_parser("stage")
     verify.add_argument("--bundle", type=Path, required=True)
     verify.add_argument("--releases", type=Path, required=True)
     verify.add_argument("--public-key", type=Path, required=True)
     args = parser.parse_args()
     if args.command == "build":
-        build(args.source, args.output, args.release, args.private_key, args.architecture)
+        build(args.source, args.output, args.release, args.private_key, args.architecture,
+              {'debianMajor': args.debian_major, 'chromiumMajor': args.chromium_major})
         print(f"Built release {args.release}")
     else:
         result = stage(args.bundle, args.releases, args.public_key)

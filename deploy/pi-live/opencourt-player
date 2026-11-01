@@ -190,7 +190,8 @@ def device_diagnostics() -> dict[str, Any]:
         uptime_seconds = 0
     storage = shutil.disk_usage("/")
     return {
-        "capabilities": {"local_image_slideshow": 1},
+        "capabilities": {"local_image_slideshow": 1,
+                         **({"remote_player_updates": 1} if os.environ.get("OPENCOURT_REMOTE_PLAYER_UPDATES") == "1" else {})},
         "hardware": {
             "model": _read_text("/proc/device-tree/model", platform.machine()),
             "architecture": platform.machine(),
