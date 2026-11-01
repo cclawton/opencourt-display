@@ -122,6 +122,22 @@ backs up the stable tools, bounds the service stop timeout, and requests a signe
 bridge release. It requires the operator's sudo password. This is TEST
 development; the final club bootstrap will include transport from the start.
 
+## Physical power-cycle acceptance
+
+The operator confirmed the menu looked correct, disconnected power for about
+10 seconds and reconnected it on 1 November. SSH returned with a new boot uptime.
+The kiosk service, stable supervisor, player and Chromium started automatically.
+`player-2026.11.01-updater3` remained accepted, with revision 29 and the same three
+slides. Fresh process-bound post-boot health was verified; the stale pre-boot
+heartbeat was not counted as evidence. Device/remote configuration checksums
+were unchanged. Authenticated cloud polling returned HTTP 200 with no pending
+command, so the completed update was not delivered again. The Pi reported
+`throttled=0x0`.
+
+This proves accepted-release recovery on a normal network after an abrupt power
+cycle. It does not yet prove offline cold boot or a physical power interruption
+during download, activation or probation.
+
 Still required before production: explicit rollback of an accepted release,
 browser rendering
 readiness, a documented secure signing-key backup/recovery procedure, and physical
