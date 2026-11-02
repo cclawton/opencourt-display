@@ -822,7 +822,7 @@ export function DeployedControlRoom({ config }: { config: RuntimeConfig }) {
 
         {section === 'displays' ? (
           <div className="space-y-4">
-            <div className="grid gap-3 sm:grid-cols-2">
+            <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
               {devices.map((item) => {
                 const name =
                   config.devices.find(
@@ -830,13 +830,13 @@ export function DeployedControlRoom({ config }: { config: RuntimeConfig }) {
                   )?.name ?? item.deviceId;
                 return (
                   <button
-                    className={`rounded-xl bg-white p-4 text-left ring-2 transition ${device?.deviceId === item.deviceId ? 'ring-club-green' : 'ring-transparent hover:ring-club-green/25'}`}
+                    className={`min-w-0 rounded-xl bg-white p-4 text-left ring-2 transition ${device?.deviceId === item.deviceId ? 'ring-club-green' : 'ring-transparent hover:ring-club-green/25'}`}
                     key={item.deviceId}
                     onClick={() => selectDevice(item)}
                     type="button"
                   >
                     <span className="flex items-center gap-2 font-bold">
-                      <Monitor className="size-5 text-club-green" /> {name}
+                      <Monitor className="size-5 shrink-0 text-club-green" /> <span className="min-w-0 break-words">{name}</span>
                     </span>
                     <span className="mt-1 block text-sm text-court-ink/55">
                       {item.lastConnectedAt
