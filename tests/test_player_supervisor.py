@@ -21,6 +21,35 @@ SPEC.loader.exec_module(PLAYER)
 
 
 class PlayerSupervisorTests(unittest.TestCase):
+    def test_failed_content_update_still_reports_connection_and_keeps_old_config(self):
+        self.check_independent_polling(content_error=PLAYER.ConfigError("configured image does not exist"))
+
+    def test_failed_status_report_does_not_block_content_polling(self):
+        self.check_independent_polling(status_error=OSError("status unavailable"))
+
+    def check_independent_polling(self, content_error=None, status_error=None):
+        config = {"revision": 2, "source": {"type": "image_slideshow"}}
+        settings = {"deviceId": "fixture"}
+        stop = mock.Mock()
+        stop.is_set.side_effect = [False, True, True]
+        browser = mock.Mock()
+        browser.poll.return_value = None
+        with mock.patch.multiple(PLAYER, STOP=stop), mock.patch.object(PLAYER.signal, "signal"), \
+             mock.patch.object(PLAYER, "load_config", return_value=config), \
+             mock.patch.object(PLAYER, "prepare_config"), \
+             mock.patch.object(PLAYER, "target_url", return_value="file:///player.html"), \
+             mock.patch.object(PLAYER, "stop_browser"), \
+             mock.patch.object(PLAYER.subprocess, "Popen", return_value=browser), \
+             mock.patch.object(PLAYER, "load_remote_settings", return_value=settings), \
+             mock.patch.object(PLAYER, "report_device_status", side_effect=status_error) as report, \
+             mock.patch.object(PLAYER, "fetch_remote_config", side_effect=content_error,
+                               return_value=(None, None)) as fetch, \
+             mock.patch.object(PLAYER, "write_config_atomically") as write:
+            self.assertEqual(PLAYER.main(), 0)
+            report.assert_called_once_with(settings, 2)
+            fetch.assert_called_once_with(settings, None)
+            write.assert_not_called()
+
     def test_slideshow_preserves_order_timing_and_one_image(self):
         from urllib.parse import parse_qs, urlparse
         with tempfile.TemporaryDirectory() as directory:
