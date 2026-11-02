@@ -144,11 +144,12 @@ class Installer:
             for name in (*SOFTWARE, *SETTINGS):
                 archive.add(self.root / name, arcname=name, recursive=False)
         (self.backup / 'before.tar').chmod(0o600)
+        with (self.backup / 'before.tar').open('rb') as stream:
+            os.fsync(stream.fileno())
         hashes = {name: sha(self.root / name) for name in (*SOFTWARE, *SETTINGS)}
         atomic_bytes(self.backup / 'before-sha256.json', json.dumps(hashes).encode(), 0o600)
         for name in (*TOOLS, 'bootstrap_install.py'):
-            shutil.copyfile(payload / name, self.backup / name)
-            (self.backup / name).chmod(0o600)
+            atomic_bytes(self.backup / name, (payload / name).read_bytes(), 0o600)
         script = '#!/bin/sh\nset -eu\nexec /usr/bin/python3 -B /var/backups/opencourt-before-updater/bootstrap_install.py restore\n'
         atomic_bytes(self.backup / 'restore.sh', script.encode(), 0o700)
 
@@ -189,8 +190,7 @@ class Installer:
         try:
             self.tools.mkdir(parents=True, mode=0o755)
             for name in TOOLS:
-                shutil.copyfile(payload / name, self.tools / name)
-                (self.tools / name).chmod(0o644)
+                atomic_bytes(self.tools / name, (payload / name).read_bytes(), 0o644)
             self.base.mkdir(parents=True, mode=0o755)
             os.chown(self.base, *self.owner)
             releases = self.base / 'releases'
@@ -203,6 +203,12 @@ class Installer:
             for path in self.base.rglob('*'):
                 if not path.is_symlink():
                     os.chown(path, *self.owner)
+                    if path.is_dir():
+                        sync_directory(path)
+                    else:
+                        with path.open('rb') as stream:
+                            os.fsync(stream.fileno())
+            sync_directory(self.base)
             self.service('stop')
             html = self.root / SOFTWARE[0]
             temporary = html.with_name('.player-updater.html')
