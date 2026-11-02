@@ -106,7 +106,7 @@ export const test = base.extend<{
       )
         return route.fulfill({
           contentType: 'application/javascript',
-          body: `window.OPENCOURT_WEB_CONFIG={environmentLabel:${JSON.stringify(environmentLabel)},apiBaseUrl:'https://api.fixture.invalid',googleClientId:'fixture.apps.googleusercontent.com',deviceId:'honours-board-tv',devices:[{deviceId:'honours-board-tv',name:'Bar Room TV'},{deviceId:'opencourt-kitchen',name:'Kitchen TV'}],cognitoUserPoolId:'ap-southeast-2_fixture',cognitoUserPoolClientId:'fixture-client'};`,
+          body: `window.OPENCOURT_WEB_CONFIG={environmentLabel:${JSON.stringify(environmentLabel)},apiBaseUrl:'https://api.fixture.invalid',googleClientId:'fixture.apps.googleusercontent.com',deviceId:'honours-board-tv',devices:[{deviceId:'honours-board-tv',name:'Honours Board TV'},{deviceId:'opencourt-kitchen',name:'Kitchen TV'}],cognitoUserPoolId:'ap-southeast-2_fixture',cognitoUserPoolClientId:'fixture-client'};`,
         });
       if (url.hostname === 'accounts.google.com') {
         if (url.pathname === '/gsi/client')

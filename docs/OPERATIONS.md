@@ -6,7 +6,7 @@ OpenCourt keeps operational monitoring deliberately small. The control room is t
 
 After each Pi has been powered at the club:
 
-1. Open **Displays** in the control room and confirm both **Bar Room TV** and **Kitchen TV** have connected within the last few minutes.
+1. Open **Displays** in the control room and confirm both **Honours Board TV** and **Kitchen TV** have connected within the last few minutes.
 2. Open each TV's information panel and confirm its expected hostname, network address and software details.
 3. Confirm **Currently showing** matches the scheduled content and includes `(Schedule)`.
 4. Use **Refresh TV** once and confirm the displayed Google Slides reload.

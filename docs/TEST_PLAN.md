@@ -55,7 +55,7 @@ See [BROWSER_UX_TESTS.md](BROWSER_UX_TESTS.md) for desktop/mobile tests against 
    - Thursday Night
 8. After each selection, confirm:
    - the success banner says the content should appear within one minute;
-   - that allocation is marked **On <display name>** (for example, **On Bar Room TV** or **On Kitchen TV**), with one badge per configured display currently showing it;
+   - that allocation is marked **On <display name>** (for example, **On Honours Board TV** or **On Kitchen TV**), with one badge per configured display currently showing it;
    - the API device record names the same content item;
    - the public device endpoint returns the same revision and source.
 9. Choose **Honours Board** and click **Show on TV**; confirm it becomes the current source.

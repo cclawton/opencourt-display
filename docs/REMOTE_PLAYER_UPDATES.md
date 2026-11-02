@@ -269,7 +269,7 @@ installation is required. Do not offer fleet-wide update in the first release.
 4. Add API request/status handling and the administrator interface in TEST.
 5. Install once on Bar Prices TV at home and run physical acceptance tests.
 6. Promote the reviewed backend and new Pi to production; retain rollback copies.
-7. At the club, bootstrap Kitchen TV first, verify it, then Bar Room TV.
+7. At the club, bootstrap Kitchen TV first, verify it, then Honours Board TV.
    Bring all three to the same accepted player release.
 
 The one-visit goal depends on completing and testing this bootstrap release
@@ -343,7 +343,7 @@ checks used the installed signed player HTML and the home Pi's actual Chromium
 - The retained legacy honours installer JPEG decoded at 3840×2160 and rendered
   correctly in a 3840×2160 Pi browser viewport; its screenshot was inspected.
   This is not verification of the current production image bytes or physical
-  4K HDMI output. Verify the actual Bar Room TV output at installation.
+  4K HDMI output. Verify the actual Honours Board TV output at installation.
 
 The kiosk service remained active on accepted updater3. Configuration and
 remote-settings hashes were unchanged. Production was inspected read-only; no

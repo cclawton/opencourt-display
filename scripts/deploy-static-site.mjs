@@ -16,7 +16,7 @@ const environmentLabel = option('--environment-label', '').trim();
 const devices = devicesFile
   ? JSON.parse(await readFile(devicesFile, 'utf8'))
   : [
-      { deviceId, name: 'Bar Room TV' },
+      { deviceId, name: 'Honours Board TV' },
       { deviceId: 'opencourt-kitchen', name: 'Kitchen TV' },
     ];
 if (

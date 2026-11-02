@@ -1084,7 +1084,7 @@ test('protects old displays from slideshow schedules, return-to-schedule and ref
 test('uses deployment display names for legacy records without changing their configuration', async () => {
   const previous = process.env.DEVICE_DISPLAY_NAMES;
   process.env.DEVICE_DISPLAY_NAMES = JSON.stringify({
-    'honours-board-tv': 'Bar Room TV',
+    'honours-board-tv': 'Honours Board TV',
   });
   try {
     const result = await createHandler(
@@ -1098,7 +1098,7 @@ test('uses deployment display names for legacy records without changing their co
     assert.equal(result.statusCode, 409);
     assert.match(
       JSON.parse(result.body).error,
-      /^Bar Room TV cannot show image slideshows yet/,
+      /^Honours Board TV cannot show image slideshows yet/,
     );
     assert.equal(item.name, undefined);
   } finally {

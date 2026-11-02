@@ -1,7 +1,7 @@
 import { test, expect } from './fixture';
 
 test('older displays explain the one-time installation without an update button', async ({ page, room: _room }) => {
-  await page.getByRole('button', { name: 'Bar Room TV information' }).click();
+  await page.getByRole('button', { name: 'Honours Board TV information' }).click();
   const panel = page.getByRole('region', { name: 'Display software' });
   await expect(panel).toContainText('one-time installation at the club');
   await expect(panel.getByRole('button', { name: 'Update this display' })).toHaveCount(0);
@@ -21,11 +21,11 @@ test('administrator updates only the selected display and sees waiting status', 
     writes.push(route.request().postDataJSON());
     return route.fulfill({ status: 202, json: { request: 'req1', release: 'player-new' } });
   });
-  await page.getByRole('button', { name: 'Bar Room TV information' }).click();
+  await page.getByRole('button', { name: 'Honours Board TV information' }).click();
   const panel = page.getByRole('region', { name: 'Display software' });
   await panel.getByLabel('Software version').selectOption('player-new');
   page.once('dialog', async dialog => {
-    expect(dialog.message()).toContain('Bar Room TV');
+    expect(dialog.message()).toContain('Honours Board TV');
     await dialog.accept();
   });
   await panel.getByRole('button', { name: 'Update this display' }).click();
@@ -37,7 +37,7 @@ test('administrator updates only the selected display and sees waiting status', 
 test.describe('convenor', () => {
   test.use({ actorRole: 'convenor' });
   test('software controls are absent for convenors', async ({ page, room: _room }) => {
-    await page.getByRole('button', { name: 'Bar Room TV information' }).click();
+    await page.getByRole('button', { name: 'Honours Board TV information' }).click();
     await expect(page.getByRole('region', { name: 'Display software' })).toHaveCount(0);
   });
 });
@@ -57,11 +57,11 @@ test('restoring a previous version is a distinct administrator action', async ({
     writes.push(route.request().postDataJSON());
     return route.fulfill({ status: 202, json: { request: 'rollback1', release: 'player-old', action: 'rollback' } });
   });
-  await page.getByRole('button', { name: 'Bar Room TV information' }).click();
+  await page.getByRole('button', { name: 'Honours Board TV information' }).click();
   const panel = page.getByRole('region', { name: 'Display software' });
   await expect(panel.getByLabel('Software version')).toHaveCount(0);
   page.once('dialog', async dialog => {
-    expect(dialog.message()).toContain('Restore the previous software on Bar Room TV');
+    expect(dialog.message()).toContain('Restore the previous software on Honours Board TV');
     await dialog.accept();
   });
   await panel.getByRole('button', { name: 'Restore previous version' }).click();

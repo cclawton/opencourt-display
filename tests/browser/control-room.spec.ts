@@ -30,7 +30,7 @@ test.describe('convenor navigation', () => {
     await expect(page.getByLabel('Schedule for')).toHaveValue(
       'honours-board-tv',
     );
-    await expect(page.getByText('Editing Bar Room TV schedule')).toBeVisible();
+    await expect(page.getByText('Editing Honours Board TV schedule')).toBeVisible();
     await page.getByLabel('Schedule for').selectOption('opencourt-kitchen');
     await expect(page.getByText('Editing Kitchen TV schedule')).toBeVisible();
     await page.getByRole('button', { name: 'Add time' }).click();
@@ -117,7 +117,7 @@ test('TV information shows connection, network and hardware diagnostics', async 
   page,
   room: _room,
 }) => {
-  await page.getByRole('button', { name: 'Bar Room TV information' }).click();
+  await page.getByRole('button', { name: 'Honours Board TV information' }).click();
   await expect(page.getByText('192.168.1.42')).toBeVisible();
   await expect(page.getByText('Raspberry Pi 5 Model B')).toBeVisible();
   await expect(page.getByText('Raspberry Pi OS')).toBeVisible();
@@ -129,7 +129,7 @@ test('shows both TVs and opens Kitchen TV diagnostics', async ({
   room: _room,
 }) => {
   await expect(
-    page.getByRole('button', { name: /Bar Room TV Last connected/ }),
+    page.getByRole('button', { name: /Honours Board TV Last connected/ }),
   ).toBeVisible();
   await expect(
     page.getByRole('button', { name: /Kitchen TV Last connected/ }),
@@ -282,7 +282,7 @@ test('saves weekly scheduling then enables it from the display dropdown', async 
   await page.getByLabel('Schedule content 1').selectOption('fixture-2');
   await page.getByRole('button', { name: 'Save schedule' }).click();
   await expect(page.getByRole('status')).toContainText(
-    'Bar Room TV schedule saved.',
+    'Honours Board TV schedule saved.',
   );
   await page.clock.setFixedTime(new Date('2026-10-05T07:00:00.000Z'));
   await page.getByRole('button', { name: 'Displays', exact: true }).click();
@@ -299,7 +299,7 @@ test('saves weekly scheduling then enables it from the display dropdown', async 
     page
       .locator('article')
       .filter({ hasText: 'Monday Night' })
-      .getByText('On Bar Room TV'),
+      .getByText('On Honours Board TV'),
   ).toBeVisible();
   expect(room.writes.map((write) => write.body)).toEqual([
     {
@@ -324,7 +324,7 @@ test('session survives reload and sign out removes committee access', async ({
   await page.reload();
   await expect(page.getByLabel('Control room sections')).toBeVisible();
   await expect(
-    page.getByRole('button', { name: /Bar Room TV Last connected/ }),
+    page.getByRole('button', { name: /Honours Board TV Last connected/ }),
   ).toBeVisible();
   await page.getByRole('button', { name: 'Sign out' }).click();
   await expect(page.getByLabel('Control room sections')).toHaveCount(0);

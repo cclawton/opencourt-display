@@ -13,7 +13,7 @@ const fallback: RuntimeConfig = {
   googleClientId: '',
   deviceId: 'honours-board-tv',
   devices: [
-    { deviceId: 'honours-board-tv', name: 'Bar Room TV' },
+    { deviceId: 'honours-board-tv', name: 'Honours Board TV' },
     { deviceId: 'opencourt-kitchen', name: 'Kitchen TV' },
   ],
   cognitoUserPoolId: '',
