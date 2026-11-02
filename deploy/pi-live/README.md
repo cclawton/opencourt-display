@@ -2,31 +2,60 @@
 
 ## Experimental player-only updater
 
-The new updater is under development; it is not part of `install.sh` and has no
-control-room button yet. See [the delivery and recovery plan](../../docs/REMOTE_PLAYER_UPDATES.md).
+The player updater is experimental but has completed real TEST update, rollback,
+power-cycle and offline checks and is running on the private pilot's third Pi.
+The control room has per-display software-update controls. Existing displays need
+this one-time installation before those controls can operate. See
+[acceptance evidence and remaining limits](../../docs/REMOTE_PLAYER_UPDATES.md).
 
-`bootstrap-updater.sh` installs the stable supervisor once with root permission.
-Its payload must include the three Python tools, a separately trusted
-`release-public.pem`, and a signed `initial-release/` directory. Only the public
-verification key goes on the Pi. The signing private key remains with the
-release operator and must be backed up securely outside Git.
+Build a package from the exact accepted signed release and the independently
+trusted public key; the builder never accesses a signing private key:
 
-Bootstrap saves the existing software and configuration in a root-only local
-backup, stages and verifies the initial release as the kiosk user, and installs
-a service override. The player HTML uses a stable link through the active release
-so image paths remain relative to the existing content directory. No OS package
-upgrade, Wi-Fi change or device re-enrolment is performed.
+```sh
+python3 scripts/build-updater-bootstrap.py --release /operator/accepted-release \
+  --public-key /operator/release-public.pem --output /operator/bootstrap-package
+```
+
+It creates the folder, a reproducible `.tar.gz`, archive checksum and per-file
+checksums. Transfer through the operator's trusted channel and compare the archive
+checksum with the separately recorded value. The root installer tools are trusted
+by that operator transfer; only the two player files are release-signed. No device
+settings, club images, credentials, private editors or private key enter the package.
+
+On each original Pi, extract it and check without restarting the running kiosk:
+
+```sh
+python3 -B bootstrap_install.py check
+sudo sh bootstrap-updater.sh
+```
+
+The preflight authenticates package files and the signed release; checks architecture,
+Debian/Chromium compatibility, original service layout and current cached content;
+and refuses existing updater state or backups. It does not fetch missing images.
+Unsupported browsers require an operator decision, not a bypass or automatic OS
+upgrade. No service is stopped and no persistent live file is changed by the check.
+
+Installation creates a root-only backup, installs the stable supervisor including
+cloud transport, and starts the exact accepted release. It retains the base service,
+other service overrides, content paths, network, HDMI settings, SSH keys, schedules
+and enrolment. A 25-second service-stop timeout is included for subsequent stops;
+the first stop still follows the original service configuration. No package/OS
+updates occur. Missing fresh player health within 90 seconds or installation failure
+restores the original software automatically. Health proves process/browser startup,
+not correct pixels: visually accept each display before proceeding to another.
 
 Restore the former kiosk if needed:
 
-```bash
+```sh
 sudo /var/backups/opencourt-before-updater/restore.sh
 ```
 
-This restores software only and preserves live configuration and credentials.
-The bootstrap deliberately refuses to overwrite an existing bootstrap backup.
-Physical browser acceptance, service integration and interruption testing are
-required before using this experimental path on club displays.
+Restore verifies the backed-up software before stopping the kiosk. It restores
+software only, keeping live content/configuration and credentials, and retains
+removed updater artifacts for investigation. It refuses a corrupt backup. After
+restoration, stop rollout and inspect; do not overwrite the original bootstrap
+backup to force a retry. Root integration on each actual club appliance remains
+an on-site acceptance step; isolated filesystem tests cannot establish HDMI output.
 
 ### Controlled offline-start check (test appliance only)
 

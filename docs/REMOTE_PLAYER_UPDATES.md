@@ -368,3 +368,37 @@ continued playing; power-cycling restored association. No persistent previous-bo
 journal was available, so the cause is unknown. Current health and power checks
 passed. Do not describe the outage as diagnosed or fixed. Controlled production
 reboot verification is requested separately.
+
+## Existing-appliance bootstrap package — 2 November
+
+The original shell prototype is now a thin entry point to a preflighted Python
+installer. A package builder uses the exact already accepted signed release and
+the separately trusted public key; it never signs or includes device settings.
+The package and tarball have per-file and archive checksums; tar metadata is
+normalised for reproducibility. Root bootstrap tools are authenticated by the
+operator's trusted transfer/checksum, separately from player release signatures.
+
+Before touching persistent live state, preflight verifies package checksums,
+signature, platform/browser constraints, expected original kiosk layout and
+existing cached content. It refuses existing updater state/backups. Installation
+includes transport and the 25-second stop timeout, with no OS/network/HDMI changes.
+A startup failure or absence of fresh player health within 90 seconds triggers
+restoration of original software. Restore verifies its backup before stopping the
+kiosk and keeps current content/configuration and credentials, even if those
+changed after bootstrap. Removed updater state is retained for investigation.
+
+Nine isolated filesystem tests cover install/restore, preservation of later live
+settings, corrupt package rejection, unsupported browser, missing image, existing
+backup refusal, failed service start, missing/stale startup health, corrupt recovery
+backup rejection, original software ownership and reproducible credential-free
+packaging. All nine passed on
+the actual home Pi under an isolated temporary root with stubbed service actions.
+All 56 Python regression tests passed on the development host. The final package's
+actual signed release, Debian/Chromium compatibility and current cached content
+also passed read-only checks on the production Pi; the live kiosk and settings
+remained unchanged.
+
+These tests do not perform a privileged bootstrap on either existing club device.
+Their actual Chromium versions and physical service/HDMI acceptance must still be
+checked on site. The target signed release remains updater3; no new player
+release, cloud deployment or fleet update was introduced by this packaging work.
