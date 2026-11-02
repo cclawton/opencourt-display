@@ -93,7 +93,7 @@ Saving a club editor does not change a TV. The generic player receives display i
 
 See [Club extension model](docs/CLUB_EXTENSIONS.md) for repository ownership, frontend/backend composition, privacy boundaries and release compatibility.
 
-See also [Architecture](docs/ARCHITECTURE.md), [MVP scope](docs/MVP.md) and [Backlog](BACKLOG.md). Older planning documents describe the original court-allocation scope and should be read alongside the broader use cases above.
+See also [Architecture](docs/ARCHITECTURE.md), [MVP scope](docs/MVP.md) and [Backlog (GitHub Issues)](https://github.com/cclawton/opencourt-display/issues). Older planning documents describe the original court-allocation scope and should be read alongside the broader use cases above.
 
 ## Security and clean-room development
 

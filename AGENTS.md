@@ -2,6 +2,22 @@
 
 These project rules supplement the user's instructions. They apply throughout this repository.
 
+## Backlog and issue tracking
+
+- GitHub Issues is the source of truth for outstanding work. Search existing open
+  and closed issues before creating a task; update an existing issue rather than
+  duplicating it. Do not maintain a competing backlog in Markdown or Beads.
+- Put reusable player/control-room features, generic bugs and public documentation
+  work in `cclawton/opencourt-display`. Put club-only editors, installation work,
+  account operations and private diagnostic details in the club's private repository.
+- Keep private details out of public issues. Split generic product work from a
+  private club rollout when necessary; private issues may reference public issues.
+- Link implementation commits/PRs to their issue. Record validation and remaining
+  acceptance before closing; implemented code alone is not physical acceptance.
+- Keep architecture, decisions, runbooks and historical evidence in documentation,
+  linked from issues. When an issue exists, use it for current status rather than
+  treating an old planning document as the live backlog.
+
 ## AWS work
 
 - Use the official [Agent Toolkit for AWS](https://aws.amazon.com/products/developer-tools/agent-toolkit-for-aws/) `aws-core` plugin for AWS work.
