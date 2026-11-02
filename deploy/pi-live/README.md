@@ -57,11 +57,11 @@ restoration, stop rollout and inspect; do not overwrite the original bootstrap
 backup to force a retry. Root integration on each actual club appliance remains
 an on-site acceptance step; isolated filesystem tests cannot establish HDMI output.
 
-### Hide the compositor pointer on a dedicated display
+### Required: transparent system cursor on every new or replacement display
 
 CSS `cursor: none` and Chromium's kiosk cursor flag do not establish that Cage's
-pointer is hidden. The earlier appliance setup uses a transparent Xcursor for
-Adwaita. A fresh appliance needs this separate step; the player updater neither
+pointer is hidden. The appliance setup requires a transparent Xcursor for
+Adwaita. Every fresh image and replacement appliance must apply this step; the player updater neither
 installs nor removes the system cursor theme. Existing club cursor fixes therefore
 survive the updater bootstrap.
 
@@ -84,7 +84,9 @@ sudo tar -C /usr/share/icons -xzf /var/backups/opencourt-adwaita-cursors-2026-10
 sudo systemctl restart opencourt-kiosk
 ```
 
-Visually verify local images, transitions and Google Slides. OS/theme package
+Acceptance requires a reboot and visual confirmation of no pointer over single
+images, slideshow transitions and Google Slides when used. See the
+[replacement-device checklist](../../docs/DISPLAY_RECOVERY.md). OS/theme package
 updates can replace system cursors; recheck after that maintenance. Do not infer
 correct pointer visibility from HTML styling alone.
 

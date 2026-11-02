@@ -24,3 +24,19 @@ These project rules supplement the user's instructions. They apply throughout th
 - Never commit AWS credentials, Google credentials, Wi-Fi passwords, tokens or resolved secret values.
 - Use short-lived AWS credentials and least-privilege IAM. For future CI deployments, use GitHub OpenID Connect rather than long-lived access keys.
 - Device endpoints may expose only the public display configuration projected by the API. Treat future member bookings or audit information as private data requiring a separate review.
+
+## Display provisioning and replacement
+
+- Transparent system cursors are a mandatory appliance setup requirement for the
+  current Cage/Chromium kiosk. CSS `cursor: none` and Chromium flags alone are not
+  accepted as a substitute; the Bar Prices Pi demonstrated that they are insufficient.
+- Every fresh SD image, new Pi or replacement-device payload must include
+  `deploy/pi-live/opencourt-transparent-cursor` and `install-transparent-cursor`,
+  and the provisioning procedure must apply the fix. See
+  `docs/DISPLAY_RECOVERY.md` and `deploy/pi-live/README.md` for install/restore steps.
+- Existing-device player updates must preserve the installed system cursor fix.
+  Do not assume it exists on a newly built appliance just because another Pi has it.
+- Acceptance requires visual confirmation of no pointer after reboot and during
+  image/slideshow transitions. Check Google Slides when used. Recheck after OS/theme
+  maintenance, which can replace cursor files. Never declare the display ready
+  based only on CSS, a running process or a file checksum.
