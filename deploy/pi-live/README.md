@@ -57,6 +57,37 @@ restoration, stop rollout and inspect; do not overwrite the original bootstrap
 backup to force a retry. Root integration on each actual club appliance remains
 an on-site acceptance step; isolated filesystem tests cannot establish HDMI output.
 
+### Hide the compositor pointer on a dedicated display
+
+CSS `cursor: none` and Chromium's kiosk cursor flag do not establish that Cage's
+pointer is hidden. The earlier appliance setup uses a transparent Xcursor for
+Adwaita. A fresh appliance needs this separate step; the player updater neither
+installs nor removes the system cursor theme. Existing club cursor fixes therefore
+survive the updater bootstrap.
+
+The generic `opencourt-transparent-cursor` asset is a 1×1 fully transparent
+Xcursor, SHA-256 `867eebb01785c1c4d3b25d26edb0dcb817656662b6f6b5b945d156586b994ca6`.
+Copy it and `install-transparent-cursor` to the intended Pi, then run:
+
+```sh
+sudo install -m 0644 opencourt-transparent-cursor /tmp/opencourt-transparent-cursor
+sudo sh install-transparent-cursor
+```
+
+The existing helper backs up Adwaita's original cursor files locally and replaces
+them, then restarts the kiosk. It changes the system theme on this dedicated
+appliance, not the slide images, player release or cloud configuration. Its backup
+name retains the original procedure's date. Restore when necessary:
+
+```sh
+sudo tar -C /usr/share/icons -xzf /var/backups/opencourt-adwaita-cursors-2026-10-03.tar.gz
+sudo systemctl restart opencourt-kiosk
+```
+
+Visually verify local images, transitions and Google Slides. OS/theme package
+updates can replace system cursors; recheck after that maintenance. Do not infer
+correct pointer visibility from HTML styling alone.
+
 ### Controlled offline-start check (test appliance only)
 
 `test-offline-start.sh` temporarily applies `PrivateNetwork=yes` to the kiosk
