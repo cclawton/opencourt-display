@@ -2,6 +2,11 @@
 
 OpenCourt keeps operational monitoring deliberately small. The control room is the fleet view: each TV reports its last connection time, software and hardware details, network address and current content. CloudWatch is the service view: the `opencourt-heatherdale-pilot-operations` dashboard graphs API traffic, errors, throttles, p95 duration and maximum concurrency over 14 days.
 
+The display selector shows three cards per row from 1024 CSS pixels, two from
+640 pixels, and one on narrower screens. Display names can wrap. Renaming a
+display means updating its website configuration and backend display-name mapping;
+keep its device ID unchanged so credentials, content and schedules remain attached.
+
 ## Club installation check
 
 After each Pi has been powered at the club:
