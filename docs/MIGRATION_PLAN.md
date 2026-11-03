@@ -244,7 +244,7 @@ Avoid very cheap or marketplace-seller cards. Capacity is not the main concern; 
 - Keep the confirmed Pi 4 kit together and leave the heatsink adhesive backing in place until its case clearance has been dry-tested.
 - Keep the known 4K JPEG at its existing path in `heatherdale-honours-board/tv-output/`.
 - Do not copy the legacy Pi scripts into the public implementation.
-- Establish source control before implementation changes. This directory is not currently a Git checkout. Create or clone the intended public repository, verify `.private-pi-audit/` and local secrets remain excluded, run a secret scan, then make the clean-room baseline commit.
+- Establish source control before implementation changes. This directory is not currently a Git checkout. Create or clone the intended public repository, verify private backup directories and local secrets remain excluded, run a secret scan, then make the clean-room baseline commit.
 
 ### Flash after returning with the card
 

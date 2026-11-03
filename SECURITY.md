@@ -10,6 +10,6 @@ Never commit:
 - Private presentation exports.
 - Member booking information.
 
-The local `.private-pi-audit/` folder contains a backup of the club's existing Pi configuration, including a plaintext Wi-Fi credential and published presentation URLs. It is Git-ignored but not encrypted. Never force-add, publish, or include it in deployment bundles; transfer it separately through a secure channel if needed on another development machine.
+Local appliance audits and backups may contain Wi-Fi credentials, device tokens, private records or presentation links. Keep them outside public source/deployment bundles, protect their storage and exclude them from Git. Never force-add a private backup; transfer it only through an approved secure channel.
 
 The public demonstration is not a production administration endpoint. It deliberately stores configuration only in the visitor's browser and accepts no credentials.

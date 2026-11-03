@@ -1,6 +1,6 @@
 # Pilot operations
 
-OpenCourt keeps operational monitoring deliberately small. The control room is the fleet view: each TV reports its last connection time, software and hardware details, network address and current content. CloudWatch is the service view: the `opencourt-heatherdale-pilot-operations` dashboard graphs API traffic, errors, throttles, p95 duration and maximum concurrency over 14 days.
+OpenCourt keeps operational monitoring deliberately small. The control room is the fleet view: each TV reports its last connection time, software and hardware details, network address and current content. CloudWatch is the service view: the deployment’s operations dashboard graphs API traffic, errors, throttles, p95 duration and maximum concurrency over 14 days.
 
 The display selector shows three cards per row from 1024 CSS pixels, two from
 640 pixels, and one on narrower screens. Display names can wrap. Renaming a
@@ -21,13 +21,13 @@ Find the deployed dashboard name at any time:
 
 ```bash
 aws cloudformation describe-stacks \
-  --stack-name OpenCourtControl \
+  --stack-name YOUR_STACK_NAME \
   --region ap-southeast-2 \
   --query 'Stacks[0].Outputs[?OutputKey==`OperationsDashboardName`].OutputValue' \
   --output text
 ```
 
-In the AWS console, choose **CloudWatch → Dashboards → opencourt-heatherdale-pilot-operations** and select the desired time range. The dashboard defaults to 14 days.
+In the AWS console, choose **CloudWatch → Dashboards**, then open the name returned by `OperationsDashboardName` and select the desired time range. The dashboard defaults to 14 days.
 
 ## What healthy looks like
 
@@ -41,7 +41,21 @@ The dashboard uses AWS-provided Lambda metrics. It creates no custom metrics and
 
 ## Investigating a fault
 
-For a timestamp shown on the dashboard, open **CloudWatch → Logs Insights**, select `/aws/lambda/opencourt-heatherdale-pilot-control-api`, set the matching time range and run:
+Find the deployment’s log group without copying another club’s resource name:
+
+```bash
+aws cloudformation describe-stack-resources \
+  --stack-name YOUR_STACK_NAME \
+  --region ap-southeast-2 \
+  --query "StackResources[?ResourceType=='AWS::Logs::LogGroup'].PhysicalResourceId" \
+  --output text
+```
+
+Replace `YOUR_STACK_NAME` with the deployment being investigated. If more than one
+log group is returned, select the API group from those stack resources. Keep real
+resource inventories and support references in private club operational records.
+
+For a timestamp shown on the dashboard, open **CloudWatch → Logs Insights**, select the API log group resolved from the target stack, set the matching time range and run:
 
 ```text
 fields @timestamp, @message, @requestId
