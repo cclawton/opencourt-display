@@ -39,11 +39,11 @@ Email OTP is enabled in two deployments so Cognito never points at an unverified
 1. Deploy with `EnableConvenorEmailOtp=false` and provide `EmailOtpSender`, `EmailOtpSandboxRecipientOne`, and `EmailOtpSandboxRecipientTwo`. Each address receives an SES verification link.
 2. After the sender and each recipient who will use email report `SUCCESS`, deploy again with `EnableConvenorEmailOtp=true` using the same parameter values. Do not add an email attribute to a convenor until that recipient is verified while SES remains sandboxed.
 
+Keep support case numbers, verification results and recipient/account status in the club’s private operational records. Check approval and verification in the target account before enabling either delivery channel.
+
 The browser then offers each convenor the delivery methods present on their Cognito record. The public convenor list exposes only the name, opaque username, and available method names; email addresses and phone numbers remain restricted to an authenticated administrator.
 
-Pilot support note (3 October 2026): AWS Support case `179093954200770` was opened to request SMS production access. The account's current support subscription does not permit the Support API, so check the case in the AWS Support Center. The convenor flow remains staged until AWS approves delivery to unverified numbers.
 
-Pilot email status (3 October 2026): the SES sender and both configured convenor recipients report `SUCCESS`. Both existing convenor records have verified email attributes and advertise email and SMS as login options. Email OTP is live while SES remains in sandbox mode; adding another recipient requires verifying that address in SES before adding it to Cognito.
 
 S3 remains private and has no anonymous write path; the browser receives a signed URL for one specific object, checksum and content type. The displayed image URL is public through CloudFront because a clubhouse Pi must download it without storing committee credentials. Replacements use versioned object keys so an active display never loses its last-known-good image.
 
@@ -63,7 +63,7 @@ Deployment requires an explicit billing-alert email:
 ```bash
 npx cdk deploy \
   --parameters BillingAlertEmail=owner@example.com \
-  --parameters ClubSlug=heatherdale \
+  --parameters ClubSlug=example-club \
   --parameters DeploymentStage=pilot \
   --parameters DeploymentOwner=personal-pilot \
   --parameters GoogleOAuthClientId=YOUR_WEB_CLIENT_ID \
@@ -82,24 +82,26 @@ The operations dashboard uses five standard Lambda metrics and adds no custom me
 
 The image feature adds no server or always-on process: it reuses the existing private S3 bucket, CloudFront distribution and on-demand Lambda. Its variable usage is limited to stored image bytes, upload/download requests, a small DynamoDB metadata item and CloudFront transfer. Pending uploads are never listed as selectable. CloudTrail S3 data events can be enabled later if the club needs object-level audit logs, but they are omitted from the tiny-club default to avoid unnecessary logging cost; display changes themselves remain in the retained audit table.
 
+The table-name placeholders below must be replaced with the target stack outputs: `DeviceConfigTableName`, `ProgrammeTableName`, `AssetTableName` and `ContentTableName`. The input path is illustrative; use the operator’s approved private seed file, never a committed club backup.
+
 The initial seed is a local administrative action, not a public API. After deploying the updated stack, migrate the retained device/programme/image records into the content table:
 
 ```bash
 npm run seed -- \
-  --table opencourt-heatherdale-pilot-device-configurations \
+  --table DEVICE_TABLE_FROM_STACK_OUTPUTS \
   --file examples/honours-board-tv.json \
   --region ap-southeast-2
 
 npm run seed-programmes -- \
-  --table opencourt-heatherdale-pilot-programmes \
-  --file ../.private-pi-audit/2026-09-27/programmes.json \
+  --table PROGRAMME_TABLE_FROM_STACK_OUTPUTS \
+  --file /secure/path/approved-programmes.json \
   --region ap-southeast-2
 
 npm run migrate-content -- \
-  --device-table opencourt-heatherdale-pilot-device-configurations \
-  --programme-table opencourt-heatherdale-pilot-programmes \
-  --asset-table opencourt-heatherdale-pilot-display-assets \
-  --content-table opencourt-heatherdale-pilot-content-items \
+  --device-table DEVICE_TABLE_FROM_STACK_OUTPUTS \
+  --programme-table PROGRAMME_TABLE_FROM_STACK_OUTPUTS \
+  --asset-table ASSET_TABLE_FROM_STACK_OUTPUTS \
+  --content-table CONTENT_TABLE_FROM_STACK_OUTPUTS \
   --device-id honours-board-tv \
   --region ap-southeast-2
 ```
@@ -126,8 +128,8 @@ After deployment, seed the retained legacy timetable only after confirming the n
 
 ```bash
 npm run seed-legacy-schedule -- \
-  --device-table opencourt-heatherdale-pilot-device-configurations \
-  --content-table opencourt-heatherdale-pilot-content-items \
+  --device-table DEVICE_TABLE_FROM_STACK_OUTPUTS \
+  --content-table CONTENT_TABLE_FROM_STACK_OUTPUTS \
   --device-id honours-board-tv \
   --region ap-southeast-2
 ```

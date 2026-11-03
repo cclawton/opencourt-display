@@ -19,6 +19,18 @@ These project rules supplement the user's instructions. They apply throughout th
 - Every supported resource must retain the application, club, deployment-stage, operational-owner, repository, data-classification and migration-target tags defined by the CDK stack.
 - Keep infrastructure portable between the pilot and future club-owned AWS accounts. Follow `infra/MIGRATION.md` and preserve the one-display-at-a-time rollback path.
 
+
+## Public documentation boundaries
+
+- Public examples must use fictional values, explicit placeholders or stack-output
+  lookups rather than a real club’s AWS resource names, support case numbers,
+  private repository identity or local backup paths. Operational inventories and
+  historical support records belong in the club’s private repository.
+- Check current public main as well as the development branch when fixing a public
+  disclosure. Removing text from one branch does not remove it from another or
+  erase previously published Git history; do not claim otherwise or rewrite history
+  without explicit authorisation.
+
 ## Credentials and data
 
 - Never commit AWS credentials, Google credentials, Wi-Fi passwords, tokens or resolved secret values.
