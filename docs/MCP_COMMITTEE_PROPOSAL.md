@@ -188,6 +188,93 @@ tools. Committee members use their chosen client; a future server-side moderatio
 or agent service adds its own costs. Do not promise the existing pilot's monthly
 cost will remain unchanged. Measure requests, rendering and storage with limits.
 
+## Coordinating Google Slides and OpenCourt
+
+This is a first-class generic workflow, not a private club-editor dependency.
+OpenCourt currently references Slides URLs and can refresh/assign them; it does
+not edit Google presentations. Committee members should be able to request one
+outcome such as "Update Saturday's court allocations, then show them on Kitchen
+TV", with the system making the stages and permissions explicit.
+
+Google supplies a Slides MCP server in Developer Preview as of this investigation;
+eligibility, supported tools and client/account access must be verified. The
+established Slides REST API is another implementation path. Do not assume a Drive
+search connector has Slides write capabilities, or that Google's preview is
+available to this club merely because its documentation exists.
+
+### Ownership and delegation
+
+Slides owns the editable presentation. OpenCourt owns its content reference,
+display assignment, schedule and player delivery. Authenticate and authorise each
+system independently. OpenCourt Google sign-in does not grant Google Drive/Slides
+editing rights. Prefer explicitly selected club files and narrowly scoped grants
+(evaluate Google's recommended `drive.file` scope and file-selection flow), with
+a server-side club presentation allowlist; do not request whole-Drive access by
+default. Making a presentation publicly viewable is a separate sensitive effect,
+not an automatic side effect of "edit slides".
+
+An assistant can discover both MCP connections, but two connectors alone do not
+provide coordinated safety. A durable workflow coordinator must validate the
+approved operation and maintain per-system results. For enforced approved
+publication, use bounded workflow operations that own the relevant Google calls,
+not an unrestricted Google write tool plus a prompt asking it to behave. An
+independent broad Google connector can bypass OpenCourt's approval boundary;
+document this limit rather than claiming OpenCourt controls all Google edits.
+
+### Preferred sequence
+
+1. Resolve the club presentation, slide/object IDs and targets. Read Google revision,
+   OpenCourt content/device/schedule revisions and current use of that presentation
+   across *all* displays. Clarify date/time, factual allocation changes and affected
+   slides; do not infer bookings from a poster or casual speech.
+2. Prepare changes in a draft/copy that is not already a live display source,
+   preserving layouts and unrelated slides. Show visual before/after previews and
+   the intended display/schedule effects. If a draft copy needs new sharing or
+   web-publication permissions, surface that explicitly and review the mechanism.
+3. Record approval for exact presentation/artifact revision, edit plan and targets.
+   Changing a deck already used live may affect TVs before any OpenCourt refresh;
+   never treat that edit as harmless staging. Either avoid live-deck edits or
+   obtain approval for the immediate, potentially multi-display effect *first*.
+4. Execute revision-guarded Slides changes. Google `presentations.batchUpdate`
+   provides `writeControl.requiredRevisionId` to reject a conflicting revision.
+   Its atomicity applies to the Google batch, not to the subsequent OpenCourt work.
+   Recheck approved state after editing and before publication. Do not silently
+   rebase over another editor or reuse an expired revision token.
+5. Publish/assign the approved deck reference or approved rendered artifact through
+   OpenCourt, with the existing plan/revision/permission safeguards. Refresh only
+   the intended displays when required. Verify the actual presentation URL is
+   usable by the kiosk without granting it committee credentials. Validate any
+   copy-to-published-URL mapping; do not guess it from a document title.
+6. Return separate results: "Slides updated", "OpenCourt assignment saved",
+   "Pi reported the requested revision" and "Visual confirmation unavailable".
+   Neither API success nor a refresh command proves the latest Google-rendered
+   content appeared. Account for external caching/publication propagation.
+
+Use stable operation IDs, recorded Google/OpenCourt checkpoints, content hashes
+where applicable and bounded retries. If Slides succeeds but OpenCourt fails,
+report that partial outcome and resume only the unfinished approved step. A failed
+Google edit must not publish old material as if it were updated. Restoration of a
+live Google deck must check for subsequent human edits; don't blindly apply an
+inverse batch or delete the presentation on a downstream failure. Prefer leaving
+a harmless unpublished draft over destructive automatic cleanup.
+
+An approved live Slides reference remains mutable. For strict "only reviewed
+artwork on screen" guarantees, use an immutable rendered snapshot through generic
+image publication instead, and document fidelity, animation/video and offline
+tradeoffs. Retain ordinary Google Slides workflows as a conscious trusted-editor
+mode rather than promising immutability we cannot enforce there.
+
+Discovery must cover actual Google connector/REST capabilities, per-file OAuth,
+revision lifetime, draft copy and publication/sharing, rendering fidelity,
+idempotency/partial failure and rollback. This is additional scope to the generic
+MCP pilot estimate; estimate implementation after that spike rather than claiming
+two connectors make the full workflow free.
+
+References:
+[Slides batch updates/revision guards](https://developers.google.com/workspace/slides/api/reference/rest/v1/presentations/batchUpdate),
+[Slides authorisation scopes](https://developers.google.com/workspace/slides/api/scopes),
+[Google Slides MCP preview](https://developers.google.com/workspace/slides/api/guides/configure-mcp-server).
+
 ## Robots and phased delivery
 
 A conversational assistant acts under a current user's grant. A scheduled robot
