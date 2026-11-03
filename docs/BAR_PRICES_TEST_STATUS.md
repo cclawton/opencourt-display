@@ -30,7 +30,7 @@ The test display starts with one sample image. Slideshow support is deliberately
 
 ## Source control and operational limits
 
-Heatherdale editor/frontend/backend source lives in a separate local Git repository at `.private-extensions/heatherdale`, ignored by the public checkout. The private repository has been pushed to private GitHub repository `cclawton/heatherdale-opencourt`. Public implementation work is saved on `codex/local-slideshow-club-extensions` for review, with no merge to main or production deployment. The private core snapshot pins this development checkpoint; this is not a released production version.
+Club editor/frontend/backend source lives in a separate private Git repository, excluded from the public checkout. Its repository identity and local workspace location are recorded only in private onboarding documentation. Public implementation work is saved on `codex/local-slideshow-club-extensions` for review, with no merge to main or production deployment. The private core snapshot pins this development checkpoint; this is not a released production version.
 
 Food/drink menus now use Save changes and reopen from a private retained S3 bucket through the authenticated administrator API. Writes use revision and ETag checks to prevent overwriting concurrent edits. Named pages support up to four items each, with Add picture buttons and a large logo-only display layout. The existing private backup script covers honours data; menu-draft S3 backup integration remains a follow-up. Menu images are ordinary exports, with no publishing API calls from either editor. Saving a generic slideshow does not automatically change existing device/schedule snapshots: select it again on Displays or save the relevant schedule to publish the new version.
 
