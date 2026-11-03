@@ -95,6 +95,10 @@ See [Club extension model](docs/CLUB_EXTENSIONS.md) for repository ownership, fr
 
 See also [Architecture](docs/ARCHITECTURE.md), [MVP scope](docs/MVP.md) and [Backlog (GitHub Issues)](https://github.com/cclawton/opencourt-display/issues). Older planning documents describe the original court-allocation scope and should be read alongside the broader use cases above.
 
+The [committee MCP proposal](docs/MCP_COMMITTEE_PROPOSAL.md) investigates optional
+natural-language assistants, scoped access, previews and human-approved publishing.
+It is a proposal, not an available connector or deployed feature.
+
 ## Security and clean-room development
 
 This is a new implementation based on independently gathered club requirements and publicly documented platform behaviour. Do not contribute source, configuration or documentation copied from a previous proprietary implementation.
